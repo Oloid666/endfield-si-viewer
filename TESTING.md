@@ -54,3 +54,13 @@ Build 唯一提示是主要 JS chunk 約 597 kB（gzip 約 153 kB），包含 Th
 - 最後重新執行預設 `npm run build`：成功。
 
 以上為桌面 Chromium / SwiftShader；不代表 iPhone Safari 真機效能。模型採用 GLB 本身的 PBR 材質，沒有還原遊戲專用 Shader。原始模型檔未改動。
+
+
+## Phase 2 待機分支測試
+
+- 模型檢查：0 個 Morph Target、0 個內建 animation clip，但具左右眼皮骨骼。
+- `IdleController` 驗證 12 個眼皮骨骼位置可動，休息與完全閉眼截圖已人工檢查（docs/screenshots/si-eye-open.png、si-eye-closed.png）。
+- 輕微呼吸可改變脊椎尺度；暫停會恢復原始尺度、頭部姿勢與張眼位置。
+- 瀏覽器實測播放／暫停 UI、替換不支援動畫的 GLB 後停用按鈕，無未捕捉 page error。
+- `npm run build` 成功；原始 GLB SHA-256 不變。
+- 尚未在 iPhone Safari 真機驗證眨眼與待機流暢度；此分支未部署或取代 main 網站。

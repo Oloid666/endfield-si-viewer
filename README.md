@@ -1,4 +1,4 @@
-# Endfield Si 3D Viewer — Phase 1
+# Endfield Si 3D Viewer — 待機測試分支
 
 以 iPhone Safari 為優先的 Three.js 人物展示頁。已接入使用者從 Sketchfab 下載並提供的祀 GLB，附有模型來源與 CC BY 4.0 署名；詳見 `public/models/SOURCE.md`。無後端、資料庫或付費 API。
 
@@ -77,3 +77,14 @@ VITE_BASE_PATH=/endfield-si-viewer/ npm run preview
 ## Phase 2 建議（尚未實作）
 
 先以實際模型確認是否帶有 idle clip，再由 `ModelManager` 管理 `AnimationMixer` 與播放狀態；讓 SceneManager 的更新 callback 傳入 delta time。播放／暫停 UI 留在 main.js，鏡頭不依賴動畫。背景與光源先擴充集中設定，再以 iPhone 實測評估動漫光影，不預先加入後處理套件。
+
+
+## Phase 2：眨眼與待機測試
+
+本分支 `phase2/blink-idle` 保留原本 `main`／GitHub Pages 的 Phase 1。頁面標題為「祀 Si · 待機測試」，尚未取代正式網站。`public/models/si.glb` 位元內容不變。
+
+新增 `IdleController`，使用現有眼皮骨骼做約 3–6 秒一次、約 0.24 秒的眨眼，另加入微幅呼吸與頭部微動。這是本站製作的程序動畫，並非遊戲官方 Idle 動作。設定集中於 `viewerConfig.idle`；不新增模型骨架、套件或額外 render loop。
+
+「暫停待機」會恢復休息姿勢與張眼，再按「播放待機」可恢復。替換為不具相容眼皮骨骼的 GLB 時，保持靜態展示並停用待機按鈕。鏡頭旋轉與重設仍可操作。分頁隱藏時停止更新，返回時不快轉補跑。
+
+後續若取得真正的動畫 clip，可改用 `AnimationMixer`；目前不包含 MMD、舞蹈、布料物理或動漫 Shader。

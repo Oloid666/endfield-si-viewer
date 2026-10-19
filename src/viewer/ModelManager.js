@@ -1,8 +1,10 @@
 import { Box3, Group, Vector3 } from 'three';
+import { IdleController } from './IdleController.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class ModelManager {
-  constructor(scene) {
+  constructor(scene, config) {
+    this.config = config;
     this.scene = scene;
     this.loader = new GLTFLoader();
     this.requestId = 0;
@@ -27,10 +29,15 @@ export class ModelManager {
       group.updateMatrixWorld(true);
       this.clear();
       this.current = { group, gltf, bounds: new Box3().setFromObject(group, true) };
+      this.current.idle = new IdleController(gltf, this.config.idle);
       this.scene.add(group);
       return this.current;
     } catch (error) { this.release(group); throw error; }
   }
+
+  update(delta) { this.current?.idle.update(delta); }
+
+  setIdlePlaying(playing) { this.current?.idle.setPlaying(playing); }
 
   release(root) {
     const geometries = new Set();
@@ -54,6 +61,7 @@ export class ModelManager {
 
   clear() {
     if (!this.current) return;
+    this.current.idle.dispose();
     this.scene.remove(this.current.group);
     this.release(this.current.group);
     this.current = null;
