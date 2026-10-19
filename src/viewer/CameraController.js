@@ -6,6 +6,8 @@ export class CameraController {
     this.camera = camera;
     this.config = config;
     this.controls = new OrbitControls(camera, element);
+    this.onInteraction = () => this.stopShoeOrbit();
+    this.controls.addEventListener('start', this.onInteraction);
     Object.assign(this.controls, {
       enableDamping: true,
       dampingFactor: config.controls.dampingFactor,
@@ -58,8 +60,30 @@ export class CameraController {
     this.controls.enableDamping = damping;
   }
 
-  reset() { if (this.bounds) this.frame(this.bounds); }
+  setModel(bounds, shoeBounds) {
+    this.stopShoeOrbit();
+    this.modelBounds = bounds.clone();
+    this.shoeBounds = shoeBounds?.clone();
+    this.frame(bounds);
+  }
+
+  startShoeOrbit() {
+    if (!this.shoeBounds) return false;
+    this.stopShoeOrbit();
+    this.frame(this.shoeBounds);
+    this.controls.autoRotateSpeed = 60 / this.config.camera.shoes.lapSeconds;
+    this.controls.autoRotate = true;
+    return true;
+  }
+
+  stopShoeOrbit() { this.controls.autoRotate = false; }
+  get shoeOrbitActive() { return this.controls.autoRotate; }
+
+  reset() {
+    this.stopShoeOrbit();
+    if (this.modelBounds || this.bounds) this.frame(this.modelBounds || this.bounds);
+  }
   resize() { if (this.bounds) this.frame(this.bounds, true); }
-  update() { this.controls.update(); }
-  dispose() { this.controls.dispose(); }
+  update(delta) { this.controls.update(delta); }
+  dispose() { this.stopShoeOrbit(); this.controls.removeEventListener('start', this.onInteraction); this.controls.dispose(); }
 }

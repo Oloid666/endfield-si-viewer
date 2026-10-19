@@ -3,7 +3,7 @@
 export const viewerConfig = { background: 0x242629,
   modelPath: 'models/si.glb',
   renderer: { maxPixelRatio: 1.5, antialias: true },
-  camera: { fov: 40, near: 0.01, far: 1000, fitPadding: 1.18 },
+  camera: { fov: 40, near: 0.01, far: 1000, fitPadding: 1.18, shoes: { heightFactor: 0.24, widthFactor: 0.16, depthFactor: 0.14, lapSeconds: 16 } },
   controls: { dampingFactor: 0.08, minPolarAngle: 0.08, maxPolarAngle: Math.PI - 0.08, minDistanceFactor: 0.15, maxDistanceFactor: 8 },
   idle:
    { blinkIntervalMin: 3,

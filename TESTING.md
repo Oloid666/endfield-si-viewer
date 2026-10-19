@@ -119,3 +119,12 @@ Build 唯一提示是主要 JS chunk 約 597 kB（gzip 約 153 kB），包含 Th
 - 本機測試曾因開發中 HMR 重新載入及 preview 未套用同一 Base Path 而中斷；改以匹配 Base Path 的正式 build 重測後通過。
 - 沒有增加 npm 依賴、第二個渲染循環、陰影或後處理；蔥為低面數幾何、128×256 程式筆觸貼圖與固定 12 點墨痕。原 GLB SHA-256 維持不變。
 - 這是原創程序動作與水墨意象，沒有官方技能 Shader、MMD 動作檔或音樂。iPhone Safari 真機、長時間負載與主觀表演自然度仍需使用者實際觀看。
+
+
+## 合乎周禮：鞋靴 360° 鏡頭
+
+- 新增獨立鏡頭按鈕，不占用傲嬌或甩蔥動作；以原始腳踝中心及模型底部建立鞋靴取景盒，不追隨跺腳而晃動。一般模型提供 Bounding Box 底部的 fallback。
+- `npm test` 10 項通過；新增鞋靴取景盒的腳踝中心、地面高度及一般模型 fallback 測試。
+- Chromium 實際 OrbitControls 測試：模擬 17 秒更新，累積水平環繞 6.600 rad（超過完整 360°），target 保持固定；重設回到原全身 Bounding Box。
+- 正式子路徑 build 的 390×844 頁面：開始／停止、手動拖曳接管、操作區收合後取景、重設及更換模型停止皆通過，無未捕捉 page error。近景截圖見 docs/screenshots/si-shoes-mobile.png。
+- 沿用唯一 render loop，以 delta 傳入 OrbitControls；預設 16 秒一圈，可連續環繞。iPhone Safari 真機手勢與幀率仍待驗證。

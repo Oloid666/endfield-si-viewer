@@ -41,6 +41,18 @@ export class ModelManager {
 
   playGesture(cameraPosition, kind) { return this.current?.idle.playGesture(cameraPosition, kind); }
 
+  getShoeBounds() {
+    if (!this.current) return null;
+    const { bounds, idle } = this.current;
+    const height = bounds.max.y - bounds.min.y;
+    const preset = this.config.camera.shoes;
+    const center = bounds.getCenter(new Vector3());
+    // Use the original ankle locations, so character motions do not shake the camera.
+    if (idle.legs) center.copy(idle.legs.L.anchor).add(idle.legs.R.anchor).multiplyScalar(0.5);
+    center.y = bounds.min.y + height * preset.heightFactor / 2;
+    return new Box3().setFromCenterAndSize(center, new Vector3(preset.widthFactor, preset.heightFactor, preset.depthFactor).multiplyScalar(height));
+  }
+
   stopGesture() { return this.current?.idle.stopGesture(); }
 
   release(root) {

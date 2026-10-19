@@ -8,6 +8,17 @@ const status = document.querySelector('#status');
 const fileInput = document.querySelector('#model-file');
 const reset = document.querySelector('#reset');
 const idleButton = document.querySelector('#idle-toggle');
+const shoeButton = document.querySelector('#shoe-orbit');
+let previousShoeState;
+
+function syncShoeButton() {
+  const active = !!camera?.shoeOrbitActive;
+  if (active === previousShoeState) return;
+  previousShoeState = active;
+  shoeButton.textContent = active ? '3 · 停止環繞' : '3 · 合乎周禮';
+  shoeButton.setAttribute('aria-pressed', String(active));
+  shoeButton.setAttribute('aria-label', active ? '停止鞋靴環繞' : '合乎周禮：鞋靴視角 360 度環繞');
+}
 const gestureButtons = [...document.querySelectorAll('[data-gesture]')];
 const gestureLabels = new Map(gestureButtons.map((button) => [button, button.textContent]));
 let previousGestureState;
@@ -59,7 +70,9 @@ async function loadModel(url, label, isDefault = false) {
     });
     if (!model || id !== requestId) return;
     document.querySelector('#model-credit').hidden = !isDefault;
-    camera.frame(model.bounds);
+    camera.setModel(model.bounds, models.getShoeBounds());
+    shoeButton.disabled = false;
+    syncShoeButton();
     reset.disabled = false;
     idleButton.disabled = !model.idle.supported;
     syncGestureButtons();
@@ -79,6 +92,7 @@ try {
     fileInput.disabled = true;
     reset.disabled = true;
     idleButton.disabled = true;
+    shoeButton.disabled = true;
     for (const button of gestureButtons) button.disabled = true;
   });
   camera = new CameraController(scene.camera, scene.renderer.domElement, viewerConfig);
@@ -99,14 +113,19 @@ try {
   observer.observe(document.querySelector('#viewport'));
   observer.observe(document.querySelector('.panel'));
   resize();
-  scene.start((delta) => { camera.update(); models.update(delta); syncGestureButtons(); });
+  scene.start((delta) => { camera.update(delta); models.update(delta); syncGestureButtons(); syncShoeButton(); });
   idleButton.addEventListener('click', () => {
     const playing = idleButton.getAttribute('aria-pressed') !== 'true';
     models.setIdlePlaying(playing);
     idleButton.setAttribute('aria-pressed', String(playing));
     idleButton.textContent = playing ? '暫停待機' : '播放待機';
   });
-  reset.addEventListener('click', () => camera.reset());
+  reset.addEventListener('click', () => { camera.reset(); syncShoeButton(); });
+  shoeButton.addEventListener('click', () => {
+    if (camera.shoeOrbitActive) camera.stopShoeOrbit();
+    else camera.startShoeOrbit();
+    syncShoeButton();
+  });
   for (const button of gestureButtons) button.addEventListener('click', () => {
     if (button.dataset.gesture === 'leek' && models.current?.idle.gestureKind === 'leek' && models.current.idle.gestureTime !== null) models.stopGesture();
     else models.playGesture(scene.camera.position, button.dataset.gesture);
