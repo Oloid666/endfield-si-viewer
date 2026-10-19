@@ -20,7 +20,10 @@ export class CameraController {
     this.camera.setViewOffset(width, height, (right - left) / 2, (bottom - top) / 2, width, height);
   }
 
-  frame(bounds) {
+  frame(bounds, preserveView = false) {
+    const direction = preserveView ? this.camera.position.clone().sub(this.controls.target).normalize() : new Vector3(0, 0, 1);
+    const zoom = preserveView && this.fitDistance ? this.camera.position.distanceTo(this.controls.target) / this.fitDistance : 1;
+    const pan = preserveView && this.bounds ? this.controls.target.clone().sub(this.bounds.getCenter(new Vector3())) : new Vector3();
     // Flush any remaining damping before replacing the view.
     const damping = this.controls.enableDamping;
     this.controls.enableDamping = false;
@@ -30,22 +33,33 @@ export class CameraController {
     const center = bounds.getCenter(new Vector3());
     const vertical = MathUtils.degToRad(this.camera.fov / 2);
     const horizontal = Math.atan(Math.tan(vertical) * this.camera.aspect);
-    const distance = (Math.max(size.y / (2 * Math.tan(vertical) * (this.visibleHeightRatio || 1)), size.x / (2 * Math.tan(horizontal) * (this.visibleWidthRatio || 1))) + size.z / 2) * this.config.camera.fitPadding;
+    const right = new Vector3().crossVectors(this.camera.up, direction).normalize();
+    const up = new Vector3().crossVectors(direction, right).normalize();
+    let fitDistance = 0;
+    for (const x of [-0.5, 0.5]) for (const y of [-0.5, 0.5]) for (const z of [-0.5, 0.5]) {
+      const corner = new Vector3(size.x * x, size.y * y, size.z * z);
+      const depth = corner.dot(direction);
+      fitDistance = Math.max(fitDistance,
+        Math.abs(corner.dot(up)) / (Math.tan(vertical) * (this.visibleHeightRatio || 1)) + depth,
+        Math.abs(corner.dot(right)) / (Math.tan(horizontal) * (this.visibleWidthRatio || 1)) + depth);
+    }
+    this.fitDistance = fitDistance * this.config.camera.fitPadding;
+    const distance = this.fitDistance * zoom;
     const scale = size.length();
     this.camera.near = Math.max(scale / 10000, 0.000001);
-    this.camera.far = Math.max(distance * this.config.controls.maxDistanceFactor * 4, scale * 10);
+    this.camera.far = Math.max(this.fitDistance * this.config.controls.maxDistanceFactor * 4, scale * 10);
     this.camera.updateProjectionMatrix();
     this.controls.minDistance = scale * this.config.controls.minDistanceFactor;
-    this.controls.maxDistance = Math.max(distance * this.config.controls.maxDistanceFactor, this.controls.minDistance * 2);
-    this.controls.target.copy(center);
-    this.camera.position.copy(center).add(new Vector3(0, 0, distance));
+    this.controls.maxDistance = Math.max(this.fitDistance * this.config.controls.maxDistanceFactor, this.controls.minDistance * 2);
+    this.controls.target.copy(center).add(pan);
+    this.camera.position.copy(this.controls.target).addScaledVector(direction, MathUtils.clamp(distance, this.controls.minDistance, this.controls.maxDistance));
     this.controls.update();
     this.controls.saveState();
     this.controls.enableDamping = damping;
   }
 
   reset() { if (this.bounds) this.frame(this.bounds); }
-  resize() { this.reset(); }
+  resize() { if (this.bounds) this.frame(this.bounds, true); }
   update() { this.controls.update(); }
   dispose() { this.controls.dispose(); }
 }

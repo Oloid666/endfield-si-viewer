@@ -8,6 +8,18 @@ const status = document.querySelector('#status');
 const fileInput = document.querySelector('#model-file');
 const reset = document.querySelector('#reset');
 const idleButton = document.querySelector('#idle-toggle');
+const gestureButton = document.querySelector('#gesture');
+const panel = document.querySelector('.panel');
+const panelToggle = document.querySelector('#panel-toggle');
+
+function setPanelExpanded(expanded) {
+  panel.dataset.expanded = String(expanded);
+  panelToggle.setAttribute('aria-expanded', String(expanded));
+  panelToggle.textContent = expanded ? '收合操作' : '展開操作';
+  document.querySelector('#panel-content').hidden = !expanded;
+}
+panelToggle.addEventListener('click', () => setPanelExpanded(panelToggle.getAttribute('aria-expanded') !== 'true'));
+
 let scene;
 let models;
 let camera;
@@ -17,6 +29,7 @@ let observer;
 function showStatus(message, error = false) {
   status.textContent = message;
   status.classList.toggle('error', error);
+  if (error) setPanelExpanded(true);
 }
 
 async function loadModel(url, label, isDefault = false) {
@@ -32,9 +45,10 @@ async function loadModel(url, label, isDefault = false) {
     camera.frame(model.bounds);
     reset.disabled = false;
     idleButton.disabled = !model.idle.supported;
+    gestureButton.disabled = !model.idle.head;
     idleButton.textContent = model.idle.supported ? '暫停待機' : '模型不支援待機';
     idleButton.setAttribute('aria-pressed', String(model.idle.supported));
-    showStatus(`${label} · 載入完成`);
+    showStatus(isDefault ? '祀 · 載入完成' : `${label} · 載入完成`);
   } catch (error) {
     if (id !== requestId) return;
     console.error('Model load failed:', error);
@@ -48,6 +62,7 @@ try {
     fileInput.disabled = true;
     reset.disabled = true;
     idleButton.disabled = true;
+    gestureButton.disabled = true;
   });
   camera = new CameraController(scene.camera, scene.renderer.domElement, viewerConfig);
   models = new ModelManager(scene.scene, viewerConfig);
@@ -75,6 +90,7 @@ try {
     idleButton.textContent = playing ? '暫停待機' : '播放待機';
   });
   reset.addEventListener('click', () => camera.reset());
+  gestureButton.addEventListener('click', () => models.playGesture(scene.camera.position));
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     fileInput.value = '';
