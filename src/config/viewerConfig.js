@@ -1,9 +1,14 @@
-// Motion distances are fractions of model height; rotations are radians.
-// Legs use the skin-weighted deformation chain, not the parallel control bones.
+// Distances are fractions of model height; rotations are radians.
 export const viewerConfig = { background: 0x242629,
   modelPath: 'models/si.glb',
   renderer: { maxPixelRatio: 1.5, antialias: true },
-  camera: { fov: 40, near: 0.01, far: 1000, fitPadding: 1.18, shoes: { heightFactor: 0.24, widthFactor: 0.16, depthFactor: 0.14, lapSeconds: 16 } },
+  camera:
+   { fov: 40,
+     near: 0.01,
+     far: 1000,
+     fitPadding: 1.18,
+     shoes: { heightFactor: 0.24, widthFactor: 0.16, depthFactor: 0.14, lapSeconds: 16 },
+     reverse: { width: 1.4, height: 1.12, depth: 0.4 } },
   controls: { dampingFactor: 0.08, minPolarAngle: 0.08, maxPolarAngle: Math.PI - 0.08, minDistanceFactor: 0.15, maxDistanceFactor: 8 },
   idle:
    { blinkIntervalMin: 3,
@@ -25,7 +30,7 @@ export const viewerConfig = { background: 0x242629,
      gestureYawLimit: 0.3,
      gesturePitchLimit: 0.12,
      transitionDuration: 0.28,
-     gestureBlinks: { tsundere: [ 0.16, 0.45, 0.76 ], leek: [] },
+     gestureBlinks: { tsundere: [ 0.16, 0.45, 0.76 ], leek: [], reverse: [] },
      bodyNodes:
       { shoulderL: 254, shoulderR: 377, armL: 256, armR: 379, elbowL: 258, elbowR: 381, wristL: 260, wristR: 383, kneeL: 39, kneeR: 69, thighL: 38, thighR: 68, footL: 40, footR: 70 },
      hipsNode: 11,
@@ -49,7 +54,8 @@ export const viewerConfig = { background: 0x242629,
            hands: [ [ 0, 0 ], [ 0.1, 0 ], [ 0.24, 1 ], [ 0.5, 1 ], [ 0.78, 0.95 ], [ 0.87, 1 ], [ 1, 0 ] ],
            stomp: [ [ 0, 0 ], [ 0.23, 0 ], [ 0.29, 1 ], [ 0.335, 0 ], [ 1, 0 ] ],
            impact: [ [ 0, 0 ], [ 0.332, 0 ], [ 0.35, 1 ], [ 0.38, -0.3 ], [ 0.43, 0 ], [ 1, 0 ] ] },
-        leek: {} },
+        leek: {},
+        reverse: {} },
      gestures:
       { tsundere:
          { duration: 6.8,
@@ -172,6 +178,15 @@ export const viewerConfig = { background: 0x242629,
            face: {},
            frames:
             [ { time: 0, yaw: 0, pitch: 0, roll: 0, eyeYaw: 0, lid: 0, viewer: 0, face: 0, browLeft: 0, browRight: 0, mouthLeft: 0, mouthRight: 0, cheek: 0 },
+              { time: 1, yaw: 0, pitch: 0, roll: 0, eyeYaw: 0, lid: 0, viewer: 0, face: 0, browLeft: 0, browRight: 0, mouthLeft: 0, mouthRight: 0, cheek: 0 } ] },
+        reverse:
+         { duration: 1.16,
+           loop: true,
+           hips: [ 0, 0, 0 ],
+           body: {},
+           face: {},
+           frames:
+            [ { time: 0, yaw: 0, pitch: 0, roll: 0, eyeYaw: 0, lid: 0, viewer: 0, face: 0, browLeft: 0, browRight: 0, mouthLeft: 0, mouthRight: 0, cheek: 0 },
               { time: 1, yaw: 0, pitch: 0, roll: 0, eyeYaw: 0, lid: 0, viewer: 0, face: 0, browLeft: 0, browRight: 0, mouthLeft: 0, mouthRight: 0, cheek: 0 } ] } },
      spineNode: 73,
      headNode: 77,
@@ -188,9 +203,11 @@ export const viewerConfig = { background: 0x242629,
         leekHand: [ -0.17, 0.2, 0.085 ],
         leekSwing: 0.055,
         leekTilt: 0.5 },
-     prop: { stemLength: 0.13, stemRadius: 0.009, leafLength: 0.18, leafWidth: 0.03, trailSamples: 12, trailWidth: 0.006, trailStep: 0.0333333 } },
+     prop: { stemLength: 0.13, stemRadius: 0.009, leafLength: 0.18, leafWidth: 0.03, trailSamples: 12, trailWidth: 0.006, trailStep: 0.0333333 },
+     reverse:
+      { cycle: 1.65, entry: 0.75, landing: 0.65, characterScale: 0.62, swing: 1.05, leekScale: 3.2, leekX: -0.38, leekY: 0.2, gripY: 0.76, gripX: 0.04, armRadius: 0.012 } },
   lights:
-   { ambient: { color: 0xffffff, intensity: 0.65 },
-     directional: { color: 0xffeddc, intensity: 2.6, position: [ -3, 5, 4 ] },
-     fill: { color: 0xd8e9ff, intensity: 0.55, position: [ 4, 2, 3 ] },
-     rim: { color: 0xe5f7ff, intensity: 1.1, position: [ 1, 4, -3 ] } } };
+   { ambient: { color: 16777215, intensity: 0.65 },
+     directional: { color: 16772572, intensity: 2.6, position: [ -3, 5, 4 ] },
+     fill: { color: 14215679, intensity: 0.55, position: [ 4, 2, 3 ] },
+     rim: { color: 15071231, intensity: 1.1, position: [ 1, 4, -3 ] } } };

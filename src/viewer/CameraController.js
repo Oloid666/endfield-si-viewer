@@ -67,6 +67,8 @@ export class CameraController {
     this.frame(bounds);
   }
 
+  showStage(bounds) { if(bounds){this.stopShoeOrbit();this.frame(bounds);} }
+
   startShoeOrbit() {
     if (!this.shoeBounds) return false;
     this.stopShoeOrbit();

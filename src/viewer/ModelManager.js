@@ -15,7 +15,10 @@ export class ModelManager {
     const id = ++this.requestId;
     const gltf = await this.loader.loadAsync(url, onProgress);
     const group = new Group();
-    group.add(gltf.scene);
+    const actor = new Group();
+    actor.name = 'si-actor';
+    actor.add(gltf.scene);
+    group.add(actor);
     if (id !== this.requestId) { this.release(group); return null; }
     try {
       group.updateMatrixWorld(true);
@@ -29,7 +32,7 @@ export class ModelManager {
       group.updateMatrixWorld(true);
       this.clear();
       this.current = { group, gltf, bounds: new Box3().setFromObject(group, true) };
-      this.current.idle = new IdleController(gltf, this.config.idle, this.current.bounds);
+      this.current.idle = new IdleController(gltf, this.config.idle, this.current.bounds, actor);
       this.scene.add(group);
       return this.current;
     } catch (error) { this.release(group); throw error; }
@@ -40,6 +43,15 @@ export class ModelManager {
   setIdlePlaying(playing) { this.current?.idle.setPlaying(playing); }
 
   playGesture(cameraPosition, kind) { return this.current?.idle.playGesture(cameraPosition, kind); }
+
+  getReverseBounds() {
+    if (!this.current) return null;
+    const {bounds}=this.current;
+    const height=bounds.max.y-bounds.min.y;
+    const center=bounds.getCenter(new Vector3());center.y=bounds.min.y+height*.58;
+    const c=this.config.camera.reverse;
+    return new Box3().setFromCenterAndSize(center,new Vector3(c.width,c.height,c.depth).multiplyScalar(height));
+  }
 
   getShoeBounds() {
     if (!this.current) return null;

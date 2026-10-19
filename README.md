@@ -44,6 +44,8 @@ src/
   viewer/IdleController.js
   viewer/LimbSolver.js
   viewer/LeekProp.js
+  viewer/ReverseLeekController.js
+  ui/loadingStatus.js
   styles/main.css
 index.html
 package.json
@@ -99,3 +101,10 @@ VITE_BASE_PATH=/endfield-si-viewer/ npm run preview
 預覽：[傲嬌](docs/previews/si-tsundere.mp4)、[水墨甩蔥](docs/previews/si-ink-leek.mp4)、[表情對照](docs/screenshots/si-expressions.jpg)。這些逐格預覽用來檢查姿勢與節奏，不代表 iPhone 實測幀率。
 
 後續若需要更細緻的表演，可在 Blender 使用原骨架製作動畫 clip，再由 AnimationMixer 播放並保留即時眼神。尚未實作遊戲官方動畫、MMD 匯入、完整手指動畫、頭髮動力學或布料模擬；iPhone Safari 真機效能仍待驗證。
+
+
+### 蔥甩蔥與介面整理
+
+「4 · 蔥甩蔥」會讓擬人化大蔥伸出水墨手臂，抓著縮小的祀左右甩動。鏡頭自動切到較寬的舞台範圍，仍可手動旋轉和縮放。再按一次或暫停待機後，祀平滑落地、恢復原尺寸，道具消失並回到全身取景；更換模型亦會完整清除。這是原創搞怪程序動畫，沒有使用布娃娃物理。預覽見 [影片](docs/previews/si-reverse-leek.mp4)。
+
+下載百分比限制在合法範圍；傳輸達到伺服器回報的大小時改顯示「處理模型與貼圖」，等模型實際準備好後才顯示載入完成。總大小不明時不顯示百分比。模型署名保留於操作區中的「模型來源與授權」，預設收起，點開可查看作者、來源及 CC BY 4.0。
