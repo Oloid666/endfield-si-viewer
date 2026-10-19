@@ -13,9 +13,11 @@ export class SceneManager {
     this.contextLost = (event) => { event.preventDefault(); this.stop(); onContextLost(); };
     this.renderer.domElement.addEventListener('webglcontextlost', this.contextLost);
     this.scene.add(new AmbientLight(config.lights.ambient.color, config.lights.ambient.intensity));
-    const light = new DirectionalLight(config.lights.directional.color, config.lights.directional.intensity);
-    light.position.fromArray(config.lights.directional.position);
-    this.scene.add(light);
+    for (const settings of [config.lights.directional, config.lights.fill, config.lights.rim].filter(Boolean)) {
+      const light = new DirectionalLight(settings.color, settings.intensity);
+      light.position.fromArray(settings.position);
+      this.scene.add(light);
+    }
   }
 
   resize() {

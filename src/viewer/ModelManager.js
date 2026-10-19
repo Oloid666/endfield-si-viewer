@@ -29,7 +29,7 @@ export class ModelManager {
       group.updateMatrixWorld(true);
       this.clear();
       this.current = { group, gltf, bounds: new Box3().setFromObject(group, true) };
-      this.current.idle = new IdleController(gltf, this.config.idle);
+      this.current.idle = new IdleController(gltf, this.config.idle, this.current.bounds);
       this.scene.add(group);
       return this.current;
     } catch (error) { this.release(group); throw error; }

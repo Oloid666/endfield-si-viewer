@@ -1,10 +1,11 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
 
 const ease = (value) => MathUtils.smoothstep(value, 0, 1);
+const REST_ROTATION = [0, 0, 0];
 
 // Runtime pose offsets only: never edit the GLB or rebuild its skeleton.
 export class IdleController {
-  constructor(gltf, config) {
+  constructor(gltf, config, bounds) {
     this.config = config;
     this.time = 0;
     this.playing = true;
@@ -14,6 +15,9 @@ export class IdleController {
     this.gaze = { targetX: 0, targetY: 0, eyeX: 0, eyeY: 0, headX: 0, headY: 0 };
     this.nextGaze = config.gazeIntervalMin;
     this.eyes = [];
+    this.body = [];
+    this.face = [];
+    this.height = bounds ? bounds.max.y - bounds.min.y : 1;
     this.eyelids = [];
     const bones = [];
     gltf.scene.traverse((node) => { if (node.isBone) bones.push(node); });
@@ -40,9 +44,26 @@ export class IdleController {
     const spine = byNode(config.spineNode);
     const head = byNode(config.headNode);
     if (spine && head && head.children.some((node) => node.name.startsWith('faceLfIrisJoint_') || node.children.some((child) => child.name.startsWith('faceLfIrisJoint_')))) {
-      this.spine = { bone: spine, scale: spine.scale.clone() };
+      this.spine = { ...this.createPose(spine), scale: spine.scale.clone() };
       this.head = this.createPose(head);
       this.eyes = [find('faceLfIrisJoint_').parent, find('faceRtIrisJoint_').parent].map((bone) => this.createPose(bone));
+      this.body.push({ name: 'spine', pose: this.spine });
+      for (const [name, id] of Object.entries(config.bodyNodes)) {
+        const bone = byNode(id);
+        if (bone) this.body.push({ name, pose: this.createPose(bone) });
+      }
+      const hips = byNode(config.hipsNode);
+      if (hips) this.hips = this.createPosition(hips);
+      for (const bone of bones) {
+        const brow = bone.name.match(/^brow(Lf|Rt)0([1-5])Joint_/);
+        const mouth = bone.name.match(/lip([LR])(?:dn|up)1Joint/);
+        const cheek = bone.name.match(/^face(Lf|Rt)CheekOtUpJoint_/);
+        if (brow || mouth || cheek) this.face.push({
+          ...this.createPosition(bone), role: brow ? 'brow' : mouth ? 'mouth' : 'cheek',
+          side: (brow?.[1] || cheek?.[1] || mouth?.[1]).startsWith('L') ? 'Left' : 'Right',
+          fraction: brow ? (Number(brow[2]) - 1) / 4 : 0,
+        });
+      }
     }
     this.offset = new Quaternion();
     this.axisOffset = new Quaternion();
@@ -71,8 +92,49 @@ export class IdleController {
     pose.bone.quaternion.copy(pose.quaternion).multiply(this.offset);
   }
 
-  playGesture(cameraPosition, kind = 'greeting') {
-    if (!this.head || this.gestureTime !== null || !Object.hasOwn(this.config.gestureDurations, kind)) return false;
+  createPosition(bone) {
+    const inverse = bone.parent.matrixWorld.clone().invert();
+    const origin = new Vector3().applyMatrix4(inverse);
+    return {
+      bone, rest: bone.position.clone(),
+      x: new Vector3(1, 0, 0).applyMatrix4(inverse).sub(origin),
+      y: new Vector3(0, 1, 0).applyMatrix4(inverse).sub(origin),
+      z: new Vector3(0, 0, 1).applyMatrix4(inverse).sub(origin),
+    };
+  }
+
+  applyBody(mood, amount) {
+    if (!amount && !this.bodyActive) return;
+    for (const { name, pose } of this.body) {
+      const angles = mood?.body[name] || REST_ROTATION;
+      const mirror = name === 'spine' ? this.awaySign : 1;
+      this.applyPose(pose, angles[0] * amount, angles[1] * amount * mirror, angles[2] * amount * mirror);
+    }
+    if (this.hips) {
+      const move = mood?.hips || REST_ROTATION;
+      this.hips.bone.position.copy(this.hips.rest)
+        .addScaledVector(this.hips.x, move[0] * amount * this.height * this.awaySign)
+        .addScaledVector(this.hips.y, move[1] * amount * this.height)
+        .addScaledVector(this.hips.z, move[2] * amount * this.height);
+    }
+    this.bodyActive = amount > 0;
+  }
+
+  applyFace(mood, amount) {
+    for (const item of this.face) {
+      let offset = 0;
+      if (item.role === 'brow') {
+        const shape = mood?.face[`brow${item.side}`] || REST_ROTATION;
+        offset = MathUtils.lerp(shape[0], shape[1], item.fraction) * amount;
+        if (this.playing) offset += Math.max(0, Math.sin(this.time * 0.6)) * this.config.idleBrowLift * (1 - amount);
+      } else if (item.role === 'mouth') offset = (mood?.face[`mouth${item.side}`] || 0) * amount;
+      else offset = (mood?.face.cheek || 0) * amount;
+      item.bone.position.copy(item.rest).addScaledVector(item.y, offset * this.height);
+    }
+  }
+
+  playGesture(cameraPosition, kind = 'cold') {
+    if (!this.head || this.gestureTime !== null || !Object.hasOwn(this.config.gestures, kind)) return false;
     this.gestureKind = kind;
     this.gesturePose = {};
     this.head.bone.getWorldPosition(this.lookDirection);
@@ -115,39 +177,32 @@ export class IdleController {
     let roll = 0;
     let eyeYaw = 0;
     let gestureBlink = 0;
-    if (this.gestureTime !== null) {
+    let bodyAmount = 0;
+    let faceAmount = 0;
+    const mood = this.gestureTime !== null ? c.gestures[this.gestureKind] : null;
+    if (mood) {
       this.gestureTime += delta;
-      const t = Math.min(1, this.gestureTime / c.gestureDurations[this.gestureKind]);
-      envelope = ease(t / 0.16) * ease((1 - t) / 0.2);
-      if (this.gestureKind === 'tsundere') {
-        const frames = c.tsundereFrames;
-        const index = frames.findIndex((frame) => frame.time >= t);
-        const b = frames[Math.max(index, 1)];
-        const a = frames[Math.max(index - 1, 0)];
-        const blend = ease((t - a.time) / (b.time - a.time));
-        for (const key of ['yaw', 'pitch', 'roll', 'eyeYaw', 'lid', 'viewer']) this.gesturePose[key] = MathUtils.lerp(a[key], b[key], blend);
-        const pose = this.gesturePose;
-        pitch = pose.pitch + this.gesturePitch * pose.viewer;
-        yaw = pose.yaw * this.awaySign + this.gestureYaw * pose.viewer;
-        roll = pose.roll * this.awaySign;
-        eyeYaw = pose.eyeYaw * this.awaySign;
-        gestureBlink = pose.lid * envelope;
-        if (t > 0.82 && t < 0.88) gestureBlink = Math.max(gestureBlink, Math.sin(Math.PI * (t - 0.82) / 0.06) ** 2);
-      } else {
-        pitch = this.gesturePitch;
-        yaw = this.gestureYaw;
-        if (this.gestureKind === 'nod') {
-          // Keep the nod visible even when the camera starts above eye level.
-          pitch *= 0.3;
-          if (t > 0.18 && t < 0.7) pitch += Math.sin(Math.PI * (t - 0.18) / 0.52) * c.nodAngle;
-        } else {
-          roll = c.gestureTilt;
-          if (t > 0.38 && t < 0.75) pitch += Math.sin(Math.PI * (t - 0.38) / 0.37) * c.gestureNod;
-        }
-        if (t > 0.25 && t < 0.33) gestureBlink = Math.sin(Math.PI * (t - 0.25) / 0.08) ** 2;
-      }
+      const t = Math.min(1, this.gestureTime / mood.duration);
+      envelope = ease(t / 0.14) * ease((1 - t) / 0.18);
+      const frames = mood.frames;
+      const index = frames.findIndex((frame) => frame.time >= t);
+      const b = frames[Math.max(index, 1)];
+      const a = frames[Math.max(index - 1, 0)];
+      const blend = ease((t - a.time) / (b.time - a.time));
+      for (const key of ['yaw', 'pitch', 'roll', 'eyeYaw', 'lid', 'viewer', 'body', 'face']) this.gesturePose[key] = MathUtils.lerp(a[key], b[key], blend);
+      const pose = this.gesturePose;
+      pitch = pose.pitch + this.gesturePitch * pose.viewer;
+      yaw = pose.yaw * this.awaySign + this.gestureYaw * pose.viewer;
+      roll = pose.roll * this.awaySign;
+      eyeYaw = pose.eyeYaw * this.awaySign;
+      bodyAmount = pose.body * envelope;
+      faceAmount = pose.face * envelope;
+      gestureBlink = pose.lid * envelope;
+      if (t > 0.82 && t < 0.88) gestureBlink = Math.max(gestureBlink, Math.sin(Math.PI * (t - 0.82) / 0.06) ** 2);
       if (t >= 1) this.gestureTime = null;
     }
+    this.applyBody(mood, bodyAmount);
+    this.applyFace(mood, faceAmount);
     this.applyPose(this.head,
       gaze.headY * c.headPitch * (1 - envelope) + pitch * envelope,
       gaze.headX * c.headYaw * (1 - envelope) + yaw * envelope,
@@ -179,6 +234,8 @@ export class IdleController {
       if (this.spine) this.spine.bone.scale.copy(this.spine.scale);
       if (this.head) this.head.bone.quaternion.copy(this.head.quaternion);
       for (const eye of this.eyes) eye.bone.quaternion.copy(eye.quaternion);
+      this.applyBody(null, 0);
+      this.applyFace(null, 0);
     }
   }
 
