@@ -36,7 +36,7 @@ export class SceneManager {
     let previous;
     this.renderer.setAnimationLoop((now) => {
       if (document.hidden) { previous = undefined; return; }
-      const delta = previous === undefined ? 0 : Math.min((now - previous) / 1000, 0.05);
+      const delta = previous === undefined ? 0 : Math.max(0, (now - previous) / 1000);
       previous = now;
       update(delta);
       this.render();
