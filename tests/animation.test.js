@@ -38,8 +38,8 @@ const close = (a, b) => assert(a.every((q, i) => q.every((v, j) => Math.abs(v - 
 const distance = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
 const viewer = new Vector3(0, 0, 4);
 
-for (const kind of ['cold', 'shy']) {
-  test(`${kind}: anticipation precedes wrist, no frozen body, returns to natural stance`, () => {
+for (const kind of ['tsundere']) {
+  test(`${kind}: waist reach, stomp and natural endpoint`, () => {
     const idle = fixture();
     assert(idle.supported && idle.head);
     const base = pose(idle);
@@ -53,7 +53,7 @@ for (const kind of ['cold', 'shy']) {
     const spine = idle.body.findIndex((part) => part.name === 'spine');
     const wrist = idle.body.findIndex((part) => part.name === 'wristR');
     assert(distance(samples[7][spine], base[spine]) > 0.001);
-    assert(distance(samples[7][wrist], base[wrist]) < 0.001);
+    assert(distance(samples[7][wrist], base[wrist]) < 0.02);
     let consecutiveStill = 0;
     for (let i = 2; i < 99; i++) {
       const motion = samples[i].reduce((sum, q, j) => sum + distance(q, samples[i - 1][j]), 0);
@@ -80,7 +80,7 @@ for (const kind of ['cold', 'shy']) {
 test('cancellation blends to natural stance and disposal restores the asset', () => {
   const idle = fixture();
   const base = pose(idle);
-  idle.playGesture(viewer, 'shy');
+  idle.playGesture(viewer, 'tsundere');
   idle.update(2);
   const before = pose(idle);
   idle.setPlaying(false);
@@ -96,10 +96,86 @@ test('cancellation blends to natural stance and disposal restores the asset', ()
   assert(idle.hips.bone.position.equals(idle.hips.rest));
 });
 
+test('hands reach the waist and the support foot stays planted during a stomp', () => {
+  const idle = fixture();
+  idle.playGesture(viewer, 'tsundere');
+  idle.update(viewerConfig.idle.gestures.tsundere.duration * .29);
+  const hips = idle.hips.bone.getWorldPosition(new Vector3());
+  for (const [j,side] of ['L','R'].entries()) {
+    const hand = idle.arms[side].end.getWorldPosition(new Vector3()).sub(hips).divideScalar(idle.height);
+    assert(hand.distanceTo(new Vector3(...viewerConfig.idle.action.waistHands[j])) < .006);
+  }
+  const support = idle.legs.L.solver.end.getWorldPosition(new Vector3());
+  const raised = idle.legs.R.solver.end.getWorldPosition(new Vector3());
+  assert(support.distanceTo(idle.legs.L.anchor) < .00001);
+  assert(raised.y - idle.legs.R.anchor.y > idle.height*.04);
+  idle.update(viewerConfig.idle.gestures.tsundere.duration * .07);
+  assert(idle.legs.R.solver.end.getWorldPosition(new Vector3()).distanceTo(idle.legs.R.anchor) < .00001);
+});
+
+test('animated feet are skin-weighted deformation bones, not unweighted controls', () => {
+  const bytes=readFileSync(new URL('../public/models/si.glb',import.meta.url));
+  const jsonLength=bytes.readUInt32LE(12);
+  const gltf=JSON.parse(bytes.subarray(20,20+jsonLength));
+  const wanted=new Set([viewerConfig.idle.bodyNodes.footL,viewerConfig.idle.bodyNodes.footR]);
+  const counts=new Map([...wanted].map(node=>[node,0]));
+  const read=(accessor,index,component)=>{
+    const a=gltf.accessors[accessor],view=gltf.bufferViews[a.bufferView];
+    const size={5121:1,5123:2,5126:4}[a.componentType];
+    const offset=28+jsonLength+(view.byteOffset||0)+(a.byteOffset||0)+index*(view.byteStride||size*4)+component*size;
+    return a.componentType===5121?bytes.readUInt8(offset):a.componentType===5123?bytes.readUInt16LE(offset):bytes.readFloatLE(offset);
+  };
+  for(const mesh of gltf.meshes)for(const primitive of mesh.primitives){
+    const attrs=primitive.attributes;if(attrs.JOINTS_0===undefined)continue;
+    for(let i=0;i<gltf.accessors[attrs.JOINTS_0].count;i++)for(let j=0;j<4;j++){
+      const node=gltf.skins[0].joints[read(attrs.JOINTS_0,i,j)];
+      if(wanted.has(node)&&read(attrs.WEIGHTS_0,i,j)>.7)counts.set(node,counts.get(node)+1);
+    }
+  }
+  for(const count of counts.values())assert(count>100);
+});
+
+test('leek loops, can stop while idle is paused, and disposes its GPU resources', () => {
+  const idle = fixture();
+  const base = pose(idle);
+  assert(idle.playGesture(viewer,'leek'));
+  idle.update(4);
+  assert.equal(idle.gestureKind,'leek');
+  assert.notEqual(idle.gestureTime,null);
+  assert(idle.leek.group.visible && idle.leek.trail.visible);
+  const grip=idle.arms.R.end.getWorldPosition(new Vector3());
+  const prop=idle.leek.group.getWorldPosition(new Vector3());
+  assert(grip.distanceTo(prop)<idle.height*.06,'prop stays in the hand');
+  const before=pose(idle);
+  assert(idle.stopGesture());
+  close(pose(idle),before);
+  idle.update(1);
+  close(pose(idle),base);
+  assert.equal(idle.leek.group.visible,false);
+  assert.equal(idle.leek.trail.visible,false);
+  assert.equal(idle.stopGesture(),false);
+  const resources=[...idle.leek.geometries,...idle.leek.materials,idle.leek.trailGeometry,idle.leek.trailMaterial];
+  let disposed=0;
+  for(const resource of resources) resource.addEventListener('dispose',()=>disposed++);
+  idle.dispose();
+  assert.equal(disposed,resources.length);
+  assert.equal(idle.leek.group.parent,null);
+  assert.equal(idle.leek.trail.parent,null);
+});
+
+test('leek maintains body pose at the same elapsed time at 15/30/60fps', () => {
+  const poses=[15,30,60].map(fps=>{
+    const idle=fixture();idle.playGesture(viewer,'leek');
+    for(let j=0;j<3*fps;j++)idle.update(1/fps);
+    return pose(idle);
+  });
+  close(poses[0],poses[1]);close(poses[0],poses[2]);
+});
+
 test('unsupported uploaded rig safely skips animation and disposes', () => {
   const idle = new IdleController({ scene: new Group() }, viewerConfig.idle);
   assert.equal(idle.supported, false);
-  assert.equal(idle.playGesture(viewer, 'shy'), false);
+  assert.equal(idle.playGesture(viewer, 'tsundere'), false);
   idle.update(1);
   idle.setPlaying(false);
   idle.dispose();

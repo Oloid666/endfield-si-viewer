@@ -1,4 +1,6 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
+import { LimbSolver } from './LimbSolver.js';
+import { LeekProp } from './LeekProp.js';
 
 const ease = (value) => MathUtils.smoothstep(value, 0, 1);
 const REST_ROTATION = [0, 0, 0];
@@ -40,6 +42,9 @@ export class IdleController {
     this.eyes = [];
     this.body = [];
     this.face = [];
+    this.fingers = [];
+    this.neutralRotation = new Quaternion();
+    this.root = gltf.scene;
     this.height = bounds ? bounds.max.y - bounds.min.y : 1;
     this.eyelids = [];
     const bones = [];
@@ -64,6 +69,8 @@ export class IdleController {
     // The FBX export lost several bone labels; resolve these through glTF node IDs,
     // then validate the known Si hierarchy rather than guessing on uploaded rigs.
     const byNode = (id) => bones.find((bone) => gltf.parser.associations.get(bone)?.nodes === id);
+    const profileNodes = [...Object.values(config.bodyNodes), ...Object.values(config.fingerNodes).flat(2), config.hipsNode, config.spineNode, config.headNode];
+    if (profileNodes.some((id) => !byNode(id))) { this.supported = false; this.eyelids = []; return; }
     const spine = byNode(config.spineNode);
     const head = byNode(config.headNode);
     if (spine && head && head.children.some((node) => node.name.startsWith('faceLfIrisJoint_') || node.children.some((child) => child.name.startsWith('faceLfIrisJoint_')))) {
@@ -77,25 +84,43 @@ export class IdleController {
       }
       const hips = byNode(config.hipsNode);
       if (hips) this.hips = this.createPosition(hips);
+      this.arms = {};
+      this.legs = {};
+      for (const side of ['L', 'R']) {
+        const arm = byNode(config.bodyNodes[`arm${side}`]), elbow = byNode(config.bodyNodes[`elbow${side}`]), wrist = byNode(config.bodyNodes[`wrist${side}`]);
+        this.arms[side] = new LimbSolver(arm, elbow, wrist);
+        const thigh = byNode(config.bodyNodes[`thigh${side}`]), knee = byNode(config.bodyNodes[`knee${side}`]), foot = byNode(config.bodyNodes[`foot${side}`]);
+        this.legs[side] = { solver: new LimbSolver(thigh,knee,foot), anchor: foot.getWorldPosition(new Vector3()), rotation: foot.getWorldQuaternion(new Quaternion()) };
+        const chains = config.fingerNodes[side === 'L' ? 'left' : 'right'];
+        const across = byNode(chains[0][0]).getWorldPosition(new Vector3()).sub(byNode(chains[3][0]).getWorldPosition(new Vector3())).normalize();
+        for(const chain of chains)for(const [segment,id] of chain.entries()) {
+          const bone=byNode(id);this.fingers.push({bone,rest:bone.quaternion.clone(),side,segment,axis:across.clone().applyQuaternion(bone.getWorldQuaternion(new Quaternion()).invert())});
+        }
+        this.arms[side].fingerDirection = byNode(chains[1][0]).getWorldPosition(new Vector3()).sub(wrist.getWorldPosition(new Vector3())).normalize().applyQuaternion(wrist.getWorldQuaternion(new Quaternion()).invert());
+      }
+      this.leek = new LeekProp(this.arms.R.end,byNode(config.fingerNodes.right[1][0]),gltf.scene.parent || gltf.scene,this.height,config.prop);
       for (const bone of bones) {
-        const brow = bone.name.match(/^brow(Lf|Rt)0([1-5])Joint_/);
-        const mouth = bone.name.match(/lip([LR])(?:dn|up)1Joint/);
+        const brow = bone.name.match(/^brow(Line)?(Lf|Rt)0([1-5])Joint_/);
+        const mouth = bone.name.match(/lip([LR])(dn|up)([1-4])Joint/);
         const cheek = bone.name.match(/^face(Lf|Rt)CheekOtUpJoint_/);
         if (brow || mouth || cheek) this.face.push({
           ...this.createPosition(bone), role: brow ? 'brow' : mouth ? 'mouth' : 'cheek',
-          side: (brow?.[1] || cheek?.[1] || mouth?.[1]).startsWith('L') ? 'Left' : 'Right',
-          fraction: brow ? (Number(brow[2]) - 1) / 4 : 0,
+          side: (brow?.[2] || cheek?.[1] || mouth?.[1]).startsWith('L') ? 'Left' : 'Right',
+          fraction: brow ? (Number(brow[3]) - 1) / (brow[1] ? 2 : 4) : mouth ? (Number(mouth[3])-1)/4 : 0,
         });
       }
     }
     this.offset = new Quaternion();
     this.axisOffset = new Quaternion();
     this.lookDirection = new Vector3();
+    this.desiredDirection = new Vector3();
+    this.target = new Vector3(); this.pole = new Vector3(); this.anchor = new Vector3();
+    this.direction = new Vector3(); this.worldRotation = new Quaternion(); this.parentRotation = new Quaternion();
     // A relaxed baseline is part of the viewer pose, not a change to the asset.
     this.applyBody(null, 0);
     this.transitionBones = [...new Set([
       ...this.body.map(({ pose }) => pose.bone), this.hips?.bone, this.head?.bone,
-      ...this.eyes.map(({ bone }) => bone), ...this.face.map(({ bone }) => bone),
+      ...this.eyes.map(({ bone }) => bone), ...this.face.map(({ bone }) => bone), ...this.fingers.map(({bone})=>bone),
       ...this.eyelids.map(({ bone }) => bone),
     ].filter(Boolean))];
   }
@@ -140,7 +165,8 @@ export class IdleController {
     for (const { name, pose } of this.body) {
       const rest = c.restBody[name] || REST_ROTATION;
       const target = mood?.body[name] || rest;
-      const amount = curves ? sampleTrack(curves[c.bodyTiming[name]], time) : 0;
+      const track = curves?.[c.bodyTiming[name]];
+      const amount = track ? sampleTrack(track, time) : 0;
       const mirror = name === 'spine' && mood ? this.awaySign : 1;
       // Chest and shoulders breathe with different phase; hands stay settled.
       const chest = name === 'spine' ? breath * 0.004 : 0;
@@ -150,12 +176,78 @@ export class IdleController {
         MathUtils.lerp(rest[2], target[2] * mirror, amount));
     }
     if (this.hips) {
-      const amount = curves ? sampleTrack(curves.hips, time) : 0;
+      const amount = curves?.hips ? sampleTrack(curves.hips, time) : 0;
       const move = mood?.hips || REST_ROTATION;
       this.hips.bone.position.copy(this.hips.rest)
         .addScaledVector(this.hips.x, move[0] * amount * this.height * this.awaySign)
         .addScaledVector(this.hips.y, move[1] * amount * this.height)
         .addScaledVector(this.hips.z, move[2] * amount * this.height);
+    }
+  }
+
+  pointFromHips(offset, out) {
+    this.hips.bone.getWorldPosition(out);
+    return out.addScaledVector(this.target.set(...offset), this.height);
+  }
+
+  orientHand(arm, direction, amount) {
+    this.desiredDirection.copy(direction);
+    arm.end.getWorldQuaternion(this.worldRotation);
+    this.direction.copy(arm.fingerDirection).applyQuaternion(this.worldRotation).normalize();
+    this.offset.setFromUnitVectors(this.direction,this.desiredDirection);
+    this.offset.slerp(this.neutralRotation,1-amount).multiply(this.worldRotation);
+    arm.end.parent.getWorldQuaternion(this.parentRotation).invert();
+    arm.end.quaternion.copy(this.parentRotation.multiply(this.offset)).normalize();
+  }
+
+  reachHand(side, offset, poleOffset, amount) {
+    const arm=this.arms[side];
+    arm.end.getWorldPosition(this.anchor);
+    this.pointFromHips(offset,this.pole);
+    this.anchor.lerp(this.pole,amount);
+    this.pointFromHips(poleOffset,this.pole);
+    arm.solve(this.anchor,this.pole);
+    this.orientHand(arm,this.direction.set(0,-1,.12).normalize(),amount);
+  }
+
+  plantFeet(lift=0, forward=0) {
+    for(const side of ['L','R']) {
+      const {solver,anchor,rotation}=this.legs[side];
+      this.anchor.copy(anchor);
+      if(side==='R'){this.anchor.y+=lift*this.height;this.anchor.z+=forward*this.height;}
+      solver.upper.getWorldPosition(this.pole);this.pole.z+=this.height;
+      solver.solve(this.anchor,this.pole);
+      solver.end.parent.getWorldQuaternion(this.parentRotation).invert();
+      solver.end.quaternion.copy(this.parentRotation.multiply(rotation));
+    }
+  }
+
+  applyActing(progress) {
+    if(progress>=1)return;
+    const c=this.config, curves=c.gestureTiming.tsundere;
+    const hands=sampleTrack(curves.hands,progress), stomp=sampleTrack(curves.stomp,progress), impact=sampleTrack(curves.impact,progress);
+    this.hips.bone.position.addScaledVector(this.hips.y,-impact*this.height*.008);
+    this.reachHand('L',c.action.waistHands[0],c.action.elbowPoles[0],hands);
+    this.reachHand('R',c.action.waistHands[1],c.action.elbowPoles[1],hands);
+    this.plantFeet(stomp*c.action.stompLift,stomp*c.action.stompForward);
+    for(const finger of this.fingers)finger.bone.quaternion.copy(finger.rest).multiply(this.axisOffset.setFromAxisAngle(finger.axis,.22*hands));
+  }
+
+  applyLeekDance(seconds,weight) {
+    const c=this.config, phase=seconds*Math.PI*2/c.action.leekCycle;
+    const swing=Math.sin(phase), bounce=Math.cos(phase*2);
+    this.applyPose(this.spine,.025+.025*bounce,.065*swing,.055*swing);
+    this.hips.bone.position.addScaledVector(this.hips.x,.014*this.height*swing*weight).addScaledVector(this.hips.y,-.004*this.height*(1-bounce)*weight);
+    this.reachHand('L',c.action.waistHands[0],c.action.elbowPoles[0],weight);
+    const hand=[...c.action.leekHand];hand[0]+=c.action.leekSwing*swing;hand[1]+=.018*bounce;
+    this.reachHand('R',hand,[-.34,.19,.12],weight);
+    const wrist=this.body.find(part=>part.name==='wristR').pose;
+    // Wrist-local offsets follow the moving arm instead of moving the prop alone.
+    this.offset.setFromAxisAngle(wrist.z,-c.action.leekTilt*swing*weight);
+    wrist.bone.quaternion.multiply(this.offset);
+    this.plantFeet();
+    for(const finger of this.fingers){const curl=(finger.side==='R'?.95:.22)*weight;
+      finger.bone.quaternion.copy(finger.rest).multiply(this.axisOffset.setFromAxisAngle(finger.axis,curl*(finger.segment===0?.7:1)));
     }
   }
 
@@ -179,20 +271,23 @@ export class IdleController {
     if (amount === 1) this.transition = null;
   }
 
-  applyFace(mood, amount) {
+  applyFace(mood, amount, progress = 0) {
+    const acting = mood && !mood.loop;
     for (const item of this.face) {
       let offset = 0;
       if (item.role === 'brow') {
         const shape = mood?.face[`brow${item.side}`] || REST_ROTATION;
-        offset = MathUtils.lerp(shape[0], shape[1], item.fraction) * amount;
+        offset = acting ? sampleTrack(mood.frames,progress,`brow${item.side}`) * amount * (1 - item.fraction*.25)
+          : mood?.loop ? .0007*amount*(item.side==='Left'?1:.6) : MathUtils.lerp(shape[0], shape[1], item.fraction) * amount;
         if (this.playing) offset += Math.max(0, Math.sin(this.time * 0.6)) * this.config.idleBrowLift * (1 - amount);
-      } else if (item.role === 'mouth') offset = (mood?.face[`mouth${item.side}`] || 0) * amount;
-      else offset = (mood?.face.cheek || 0) * amount;
+      } else if (item.role === 'mouth') offset = acting ? sampleTrack(mood.frames,progress,`mouth${item.side}`)*amount : mood?.loop ? .00085*amount : 0;
+      else offset = acting ? sampleTrack(mood.frames,progress,'cheek')*amount : mood?.loop ? .0004*amount : 0;
+      if(item.role==='mouth') offset *= 1-item.fraction;
       item.bone.position.copy(item.rest).addScaledVector(item.y, offset * this.height);
     }
   }
 
-  playGesture(cameraPosition, kind = 'cold') {
+  playGesture(cameraPosition, kind = 'tsundere') {
     if (!this.head || this.gestureTime !== null || !Object.hasOwn(this.config.gestures, kind)) return false;
     this.beginTransition(this.config.transitionDuration);
     this.gestureKind = kind;
@@ -207,7 +302,7 @@ export class IdleController {
   }
 
   update(delta) {
-    if (!this.supported || (!this.playing && this.gestureTime === null && !this.transition)) return;
+    if (!this.supported || (!this.playing && this.gestureTime === null && !this.transition && !this.leek?.alpha)) return;
     const c = this.config;
     if (this.playing) {
       this.time += delta;
@@ -239,10 +334,12 @@ export class IdleController {
     let gestureBlink = 0;
     let gestureProgress = 0;
     let faceAmount = 0;
+    let loopWeight = 0;
     const mood = this.gestureTime !== null ? c.gestures[this.gestureKind] : null;
     if (mood) {
       this.gestureTime += delta;
-      const t = Math.min(1, this.gestureTime / mood.duration);
+      const t = mood.loop ? (this.gestureTime % mood.duration) / mood.duration : Math.min(1, this.gestureTime / mood.duration);
+      loopWeight = mood.loop ? ease(this.gestureTime / c.transitionDuration) : 0;
       envelope = ease(t / 0.14) * ease((1 - t) / 0.18);
       gestureProgress = t;
       for (const key of ['yaw', 'pitch', 'roll', 'eyeYaw', 'lid', 'viewer', 'face']) {
@@ -260,10 +357,21 @@ export class IdleController {
         const blinkPhase = (t - center) * mood.duration / c.blinkDuration + 0.5;
         if (blinkPhase > 0 && blinkPhase < 1) gestureBlink = Math.max(gestureBlink, Math.sin(Math.PI * blinkPhase) ** 2);
       }
-      if (t >= 1) this.gestureTime = null;
+      if (!mood.loop && t >= 1) this.gestureTime = null;
     }
     this.applyBody(mood, gestureProgress);
-    this.applyFace(mood, faceAmount);
+    for(const finger of this.fingers)finger.bone.quaternion.copy(finger.rest);
+    if (mood && !mood.loop) this.applyActing(gestureProgress);
+    if (mood?.loop) {
+      this.applyLeekDance(this.gestureTime, loopWeight);
+      const phase = this.gestureTime * Math.PI * 2 / c.action.leekCycle;
+      envelope = loopWeight;
+      pitch = .035 + .055 * Math.cos(phase*2); yaw = .09 * Math.sin(phase*.5); roll = .09 * Math.sin(phase);
+      eyeYaw = -.09 * Math.sin(phase); faceAmount = .8 * loopWeight;
+      const blinkPhase = (this.gestureTime % (c.action.leekCycle*3)) / c.blinkDuration;
+      gestureBlink = blinkPhase < 1 ? Math.sin(Math.PI*blinkPhase)**2 : 0;
+    }
+    this.applyFace(mood, faceAmount, gestureProgress);
     this.applyPose(this.head,
       gaze.headY * c.headPitch * (1 - envelope) + pitch * envelope,
       gaze.headX * c.headYaw * (1 - envelope) + yaw * envelope,
@@ -282,6 +390,14 @@ export class IdleController {
     }
     this.setBlink(Math.max(blink, gestureBlink));
     this.blendTransition(delta);
+    this.leek?.update(!!mood?.loop, delta, c.action.leekFade, this.gestureTime === null ? 0 : -c.action.leekTilt*Math.sin(this.gestureTime*Math.PI*2/c.action.leekCycle));
+  }
+
+  stopGesture() {
+    if(this.gestureTime === null)return false;
+    this.beginTransition(this.config.transitionDuration);
+    this.gestureTime = null;
+    return true;
   }
 
   setPlaying(playing) {
@@ -296,6 +412,8 @@ export class IdleController {
 
   dispose() {
     // Release offsets immediately when replacing the model, without a blend.
+    this.leek?.dispose();
+    for(const finger of this.fingers)finger.bone.quaternion.copy(finger.rest);
     for (const { pose } of this.body) pose.bone.quaternion.copy(pose.quaternion);
     if (this.hips) this.hips.bone.position.copy(this.hips.rest);
     if (this.spine) this.spine.bone.scale.copy(this.spine.scale);
