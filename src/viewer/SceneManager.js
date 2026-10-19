@@ -31,9 +31,12 @@ export class SceneManager {
 
   start(update) {
     this.stop();
-    this.renderer.setAnimationLoop(() => {
-      if (document.hidden) return;
-      update();
+    let previous;
+    this.renderer.setAnimationLoop((now) => {
+      if (document.hidden) { previous = undefined; return; }
+      const delta = previous === undefined ? 0 : Math.min((now - previous) / 1000, 0.05);
+      previous = now;
+      update(delta);
       this.render();
     });
   }

@@ -7,6 +7,7 @@ import { CameraController } from './viewer/CameraController.js';
 const status = document.querySelector('#status');
 const fileInput = document.querySelector('#model-file');
 const reset = document.querySelector('#reset');
+const idleButton = document.querySelector('#idle-toggle');
 let scene;
 let models;
 let camera;
@@ -30,6 +31,9 @@ async function loadModel(url, label, isDefault = false) {
     document.querySelector('#model-credit').hidden = !isDefault;
     camera.frame(model.bounds);
     reset.disabled = false;
+    idleButton.disabled = !model.idle.supported;
+    idleButton.textContent = model.idle.supported ? '暫停待機' : '模型不支援待機';
+    idleButton.setAttribute('aria-pressed', String(model.idle.supported));
     showStatus(`${label} · 載入完成`);
   } catch (error) {
     if (id !== requestId) return;
@@ -43,9 +47,10 @@ try {
     showStatus('WebGL 繪圖連線已中斷，請重新整理頁面。', true);
     fileInput.disabled = true;
     reset.disabled = true;
+    idleButton.disabled = true;
   });
   camera = new CameraController(scene.camera, scene.renderer.domElement, viewerConfig);
-  models = new ModelManager(scene.scene);
+  models = new ModelManager(scene.scene, viewerConfig);
   const resize = () => {
     scene.resize();
     const viewport = document.querySelector('#viewport').getBoundingClientRect();
@@ -62,7 +67,13 @@ try {
   observer.observe(document.querySelector('#viewport'));
   observer.observe(document.querySelector('.panel'));
   resize();
-  scene.start(() => camera.update());
+  scene.start((delta) => { camera.update(); models.update(delta); });
+  idleButton.addEventListener('click', () => {
+    const playing = idleButton.getAttribute('aria-pressed') !== 'true';
+    models.setIdlePlaying(playing);
+    idleButton.setAttribute('aria-pressed', String(playing));
+    idleButton.textContent = playing ? '暫停待機' : '播放待機';
+  });
   reset.addEventListener('click', () => camera.reset());
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];

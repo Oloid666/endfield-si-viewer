@@ -11,7 +11,7 @@ h1 span { font-size: 17px; color: #bbc2bd; margin-left: 10px; }
 .panel { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom)); left: calc(16px + env(safe-area-inset-left)); max-width: min(390px, calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right))); padding: 14px; border: 1px solid #ffffff20; border-radius: 12px; background: #1b1d20ed; }
 #status { font-size: 13px; line-height: 1.5; margin: 0 0 12px; overflow-wrap: anywhere; }
 #status.error { color: #ffceba; }
-.actions { display: flex; gap: 10px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button, .button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; font: inherit; font-size: 13px; border-radius: 7px; border: 1px solid #ffffff32; background: #33383a; color: #fff; cursor: pointer; }
 .button { background: #c8ddac; color: #20271c; border-color: transparent; }
 button:disabled { opacity: .4; cursor: default; }
