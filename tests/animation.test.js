@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { Bone, Box3, Group, Matrix4, Vector3 } from 'three';
 import { IdleController } from '../src/viewer/IdleController.js';
 import { SceneManager } from '../src/viewer/SceneManager.js';
+import { ModelManager } from '../src/viewer/ModelManager.js';
 import { viewerConfig } from '../src/config/viewerConfig.js';
 
 // Reconstruct the supplied asset's actual node hierarchy without decoding images
@@ -199,4 +200,20 @@ test('render clock preserves low-fps elapsed time and ignores hidden-tab time', 
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
   }
+});
+
+
+test('shoe preset uses ankle center, the model floor and a static fallback', () => {
+  const manager = new ModelManager(new Group(), viewerConfig);
+  assert.equal(manager.getShoeBounds(), null);
+  manager.current = {
+    bounds: new Box3(new Vector3(-1,-2,-1),new Vector3(1,2,1)),
+    idle: { legs: { L: {anchor:new Vector3(.2,-1.8,.3)}, R:{anchor:new Vector3(-.2,-1.8,.3)} } },
+  };
+  const shoe=manager.getShoeBounds();const center=shoe.getCenter(new Vector3());
+  assert(Math.abs(center.x)<1e-8&&Math.abs(center.z-.3)<1e-8);
+  assert.equal(shoe.min.y,-2);
+  assert.equal(shoe.max.y,-2+4*viewerConfig.camera.shoes.heightFactor);
+  manager.current.idle={};
+  assert(manager.getShoeBounds().getCenter(new Vector3()).z===0);
 });
