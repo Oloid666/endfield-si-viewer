@@ -71,12 +71,15 @@ export class IdleController {
     pose.bone.quaternion.copy(pose.quaternion).multiply(this.offset);
   }
 
-  playGesture(cameraPosition) {
-    if (!this.head || this.gestureTime !== null) return false;
+  playGesture(cameraPosition, kind = 'greeting') {
+    if (!this.head || this.gestureTime !== null || !Object.hasOwn(this.config.gestureDurations, kind)) return false;
+    this.gestureKind = kind;
+    this.gesturePose = {};
     this.head.bone.getWorldPosition(this.lookDirection);
     this.lookDirection.subVectors(cameraPosition, this.lookDirection);
     this.gestureYaw = MathUtils.clamp(Math.atan2(this.lookDirection.x, this.lookDirection.z), -this.config.gestureYawLimit, this.config.gestureYawLimit);
     this.gesturePitch = MathUtils.clamp(-Math.atan2(this.lookDirection.y, Math.hypot(this.lookDirection.x, this.lookDirection.z)), -this.config.gesturePitchLimit, this.config.gesturePitchLimit);
+    this.awaySign = this.gestureYaw >= 0 ? -1 : 1;
     this.gestureTime = 0;
     return true;
   }
@@ -107,22 +110,50 @@ export class IdleController {
       this.spine.bone.scale.y *= 1 + breath * c.breathAmount;
     }
     let envelope = 0;
-    let nod = 0;
+    let pitch = 0;
+    let yaw = 0;
+    let roll = 0;
+    let eyeYaw = 0;
     let gestureBlink = 0;
     if (this.gestureTime !== null) {
       this.gestureTime += delta;
-      const t = this.gestureTime / c.gestureDuration;
-      envelope = ease(t / 0.22) * ease((1 - t) / 0.25);
-      if (t > 0.38 && t < 0.75) nod = Math.sin(Math.PI * (t - 0.38) / 0.37) * c.gestureNod;
-      if (t > 0.25 && t < 0.33) gestureBlink = Math.sin(Math.PI * (t - 0.25) / 0.08) ** 2;
+      const t = Math.min(1, this.gestureTime / c.gestureDurations[this.gestureKind]);
+      envelope = ease(t / 0.16) * ease((1 - t) / 0.2);
+      if (this.gestureKind === 'tsundere') {
+        const frames = c.tsundereFrames;
+        const index = frames.findIndex((frame) => frame.time >= t);
+        const b = frames[Math.max(index, 1)];
+        const a = frames[Math.max(index - 1, 0)];
+        const blend = ease((t - a.time) / (b.time - a.time));
+        for (const key of ['yaw', 'pitch', 'roll', 'eyeYaw', 'lid', 'viewer']) this.gesturePose[key] = MathUtils.lerp(a[key], b[key], blend);
+        const pose = this.gesturePose;
+        pitch = pose.pitch + this.gesturePitch * pose.viewer;
+        yaw = pose.yaw * this.awaySign + this.gestureYaw * pose.viewer;
+        roll = pose.roll * this.awaySign;
+        eyeYaw = pose.eyeYaw * this.awaySign;
+        gestureBlink = pose.lid * envelope;
+        if (t > 0.82 && t < 0.88) gestureBlink = Math.max(gestureBlink, Math.sin(Math.PI * (t - 0.82) / 0.06) ** 2);
+      } else {
+        pitch = this.gesturePitch;
+        yaw = this.gestureYaw;
+        if (this.gestureKind === 'nod') {
+          // Keep the nod visible even when the camera starts above eye level.
+          pitch *= 0.3;
+          if (t > 0.18 && t < 0.7) pitch += Math.sin(Math.PI * (t - 0.18) / 0.52) * c.nodAngle;
+        } else {
+          roll = c.gestureTilt;
+          if (t > 0.38 && t < 0.75) pitch += Math.sin(Math.PI * (t - 0.38) / 0.37) * c.gestureNod;
+        }
+        if (t > 0.25 && t < 0.33) gestureBlink = Math.sin(Math.PI * (t - 0.25) / 0.08) ** 2;
+      }
       if (t >= 1) this.gestureTime = null;
     }
     this.applyPose(this.head,
-      gaze.headY * c.headPitch * (1 - envelope) + (this.gesturePitch || 0) * envelope + nod,
-      gaze.headX * c.headYaw * (1 - envelope) + (this.gestureYaw || 0) * envelope,
-      -gaze.headX * c.headTilt * (1 - envelope) + c.gestureTilt * envelope);
-    for (const eye of this.eyes) this.applyPose(eye, gaze.eyeY * c.eyePitch * (1 - envelope), gaze.eyeX * c.eyeYaw * (1 - envelope));
-    if (this.playing && this.blinkTime === null && this.time >= this.nextBlink) this.blinkTime = 0;
+      gaze.headY * c.headPitch * (1 - envelope) + pitch * envelope,
+      gaze.headX * c.headYaw * (1 - envelope) + yaw * envelope,
+      -gaze.headX * c.headTilt * (1 - envelope) + roll * envelope);
+    for (const eye of this.eyes) this.applyPose(eye, gaze.eyeY * c.eyePitch * (1 - envelope), gaze.eyeX * c.eyeYaw * (1 - envelope) + eyeYaw * envelope);
+    if (this.playing && this.gestureTime === null && this.blinkTime === null && this.time >= this.nextBlink) this.blinkTime = 0;
     let blink = 0;
     if (this.blinkTime !== null) {
       this.blinkTime += delta;
