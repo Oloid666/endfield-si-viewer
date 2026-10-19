@@ -19,8 +19,10 @@ function syncGestureButtons() {
   if (state === previousGestureState) return;
   previousGestureState = state;
   for (const button of gestureButtons) {
-    button.disabled = !idle?.head || !!active;
-    button.textContent = gestureLabels.get(button) + (active === button.dataset.gesture ? '…' : '');
+    button.disabled = !idle?.head || (!!active && !(active === 'leek' && button.dataset.gesture === 'leek'));
+    button.textContent = active === 'leek' && button.dataset.gesture === 'leek' ? '2 · 停止甩蔥' : gestureLabels.get(button) + (active === button.dataset.gesture ? '…' : '');
+    button.setAttribute('aria-pressed', String(active === button.dataset.gesture));
+    button.setAttribute('aria-label', button.textContent);
     button.setAttribute('aria-busy', String(active === button.dataset.gesture));
   }
 }
@@ -106,7 +108,8 @@ try {
   });
   reset.addEventListener('click', () => camera.reset());
   for (const button of gestureButtons) button.addEventListener('click', () => {
-    models.playGesture(scene.camera.position, button.dataset.gesture);
+    if (button.dataset.gesture === 'leek' && models.current?.idle.gestureKind === 'leek' && models.current.idle.gestureTime !== null) models.stopGesture();
+    else models.playGesture(scene.camera.position, button.dataset.gesture);
     syncGestureButtons();
   });
   fileInput.addEventListener('change', async () => {
