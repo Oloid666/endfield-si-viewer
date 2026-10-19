@@ -128,3 +128,12 @@ Build 唯一提示是主要 JS chunk 約 597 kB（gzip 約 153 kB），包含 Th
 - Chromium 實際 OrbitControls 測試：模擬 17 秒更新，累積水平環繞 6.600 rad（超過完整 360°），target 保持固定；重設回到原全身 Bounding Box。
 - 正式子路徑 build 的 390×844 頁面：開始／停止、手動拖曳接管、操作區收合後取景、重設及更換模型停止皆通過，無未捕捉 page error。近景截圖見 docs/screenshots/si-shoes-mobile.png。
 - 沿用唯一 render loop，以 delta 傳入 OrbitControls；預設 16 秒一圈，可連續環繞。iPhone Safari 真機手勢與幀率仍待驗證。
+
+
+## 蔥甩蔥、載入狀態與第二層署名
+
+- `npm test` 13 項通過，新增壓縮大小不一致／未知總大小／處理階段的進度格式測試，以及反轉表演的抓握、落地、15/30/60fps 一致、原始尺寸恢復與資源釋放測試。
+- Chromium/WebGL 逐格檢查擬人大蔥與縮小人物的甩動：手腕與墨手位置吻合，停止後 wrapper 的 position、quaternion、scale 回到原值；原 GLB 及骨架結構不變。
+- 正式子路徑 Build 的手機尺寸複測：署名預設收起且可展開、三個角色動作與獨立鞋靴鏡頭、蔥甩蔥開始／停止／落地、既有甩蔥仍可使用；反轉表演期間替換為一般 GLB 後停用不相容動作且隱藏原模型署名。無未捕捉 page error。
+- 新表演沿用唯一 render loop，新增外層 actor 容器與輕量水墨手臂，不新增 npm 套件、後處理或模型下載。
+- 整體表演會自動拉遠取景；手機可雙指放大細看。實體 iPhone Safari 的幀率及長時間穩定性仍待實測。

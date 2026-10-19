@@ -1,6 +1,7 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
 import { LimbSolver } from './LimbSolver.js';
 import { LeekProp } from './LeekProp.js';
+import { ReverseLeekController } from './ReverseLeekController.js';
 
 const ease = (value) => MathUtils.smoothstep(value, 0, 1);
 const REST_ROTATION = [0, 0, 0];
@@ -29,7 +30,7 @@ function sampleTrack(points, time, key = 1) {
 
 // Runtime pose offsets only: never edit the GLB or rebuild its skeleton.
 export class IdleController {
-  constructor(gltf, config, bounds) {
+  constructor(gltf, config, bounds, actor = gltf.scene) {
     this.config = config;
     this.time = 0;
     this.awaySign = 1;
@@ -110,6 +111,7 @@ export class IdleController {
         });
       }
     }
+    if (this.arms) this.reverse = new ReverseLeekController(actor, this.arms.R.end, bounds, this.height, config.reverse, config.prop);
     this.offset = new Quaternion();
     this.axisOffset = new Quaternion();
     this.lookDirection = new Vector3();
@@ -282,13 +284,17 @@ export class IdleController {
         if (this.playing) offset += Math.max(0, Math.sin(this.time * 0.6)) * this.config.idleBrowLift * (1 - amount);
       } else if (item.role === 'mouth') offset = acting ? sampleTrack(mood.frames,progress,`mouth${item.side}`)*amount : mood?.loop ? .00085*amount : 0;
       else offset = acting ? sampleTrack(mood.frames,progress,'cheek')*amount : mood?.loop ? .0004*amount : 0;
+      if (mood && this.gestureKind==='reverse') {
+        const surprised=this.gestureTime<this.config.reverse.cycle*1.5;
+        offset=(item.role==='brow'?(surprised?.0014:-.0013):item.role==='mouth'?-.0007:.0003)*amount;
+      }
       if(item.role==='mouth') offset *= 1-item.fraction;
       item.bone.position.copy(item.rest).addScaledVector(item.y, offset * this.height);
     }
   }
 
   playGesture(cameraPosition, kind = 'tsundere') {
-    if (!this.head || this.gestureTime !== null || !Object.hasOwn(this.config.gestures, kind)) return false;
+    if (!this.head || this.gestureTime !== null || this.reverse?.landing || !Object.hasOwn(this.config.gestures, kind)) return false;
     this.beginTransition(this.config.transitionDuration);
     this.gestureKind = kind;
     this.gesturePose = {};
@@ -298,11 +304,12 @@ export class IdleController {
     this.gesturePitch = MathUtils.clamp(-Math.atan2(this.lookDirection.y, Math.hypot(this.lookDirection.x, this.lookDirection.z)), -this.config.gesturePitchLimit, this.config.gesturePitchLimit);
     this.awaySign = this.gestureYaw >= 0 ? -1 : 1;
     this.gestureTime = 0;
+    if(kind==='reverse')this.reverse.start();
     return true;
   }
 
   update(delta) {
-    if (!this.supported || (!this.playing && this.gestureTime === null && !this.transition && !this.leek?.alpha)) return;
+    if (!this.supported || (!this.playing && this.gestureTime === null && !this.transition && !this.leek?.alpha && !this.reverse?.visible)) return;
     const c = this.config;
     if (this.playing) {
       this.time += delta;
@@ -362,7 +369,7 @@ export class IdleController {
     this.applyBody(mood, gestureProgress);
     for(const finger of this.fingers)finger.bone.quaternion.copy(finger.rest);
     if (mood && !mood.loop) this.applyActing(gestureProgress);
-    if (mood?.loop) {
+    if (mood?.loop && this.gestureKind === 'leek') {
       this.applyLeekDance(this.gestureTime, loopWeight);
       const phase = this.gestureTime * Math.PI * 2 / c.action.leekCycle;
       envelope = loopWeight;
@@ -370,6 +377,18 @@ export class IdleController {
       eyeYaw = -.09 * Math.sin(phase); faceAmount = .8 * loopWeight;
       const blinkPhase = (this.gestureTime % (c.action.leekCycle*3)) / c.blinkDuration;
       gestureBlink = blinkPhase < 1 ? Math.sin(Math.PI*blinkPhase)**2 : 0;
+    }
+    if (mood && this.gestureKind === 'reverse') {
+      const phase = this.gestureTime*Math.PI*2/c.reverse.cycle;
+      envelope = loopWeight; faceAmount=loopWeight;
+      this.applyPose(this.body.find(p=>p.name==='armR').pose,0,0,-2.05*loopWeight);
+      this.applyPose(this.body.find(p=>p.name==='elbowR').pose,-.12*loopWeight,.1*loopWeight,0);
+      this.applyPose(this.body.find(p=>p.name==='armL').pose,-.3,.1,.55+.3*Math.sin(phase+1));
+      this.applyPose(this.body.find(p=>p.name==='thighL').pose,.15*Math.sin(phase),0,0);
+      this.applyPose(this.body.find(p=>p.name==='kneeL').pose,.3+.18*Math.sin(phase+1),0,0);
+      this.applyPose(this.body.find(p=>p.name==='kneeR').pose,.4+.2*Math.sin(phase),0,0);
+      pitch=-.06+.06*Math.sin(phase);yaw=.15*Math.sin(phase);roll=-.1*Math.sin(phase);
+      eyeYaw=-.1*Math.sin(phase);gestureBlink=0;
     }
     this.applyFace(mood, faceAmount, gestureProgress);
     this.applyPose(this.head,
@@ -390,17 +409,20 @@ export class IdleController {
     }
     this.setBlink(Math.max(blink, gestureBlink));
     this.blendTransition(delta);
-    this.leek?.update(!!mood?.loop, delta, c.action.leekFade, this.gestureTime === null ? 0 : -c.action.leekTilt*Math.sin(this.gestureTime*Math.PI*2/c.action.leekCycle));
+    this.reverse?.update(this.gestureTime || 0, delta);
+    this.leek?.update(!!mood?.loop && this.gestureKind === 'leek', delta, c.action.leekFade, this.gestureTime === null ? 0 : -c.action.leekTilt*Math.sin(this.gestureTime*Math.PI*2/c.action.leekCycle));
   }
 
   stopGesture() {
     if(this.gestureTime === null)return false;
-    this.beginTransition(this.config.transitionDuration);
+    this.beginTransition(this.gestureKind==='reverse'?this.config.reverse.landing:this.config.transitionDuration);
+    this.reverse?.stop();
     this.gestureTime = null;
     return true;
   }
 
   setPlaying(playing) {
+    this.reverse?.stop();
     if (this.transitionBones) this.beginTransition(this.config.transitionDuration);
     this.playing = playing;
     this.gestureTime = null;
@@ -412,6 +434,7 @@ export class IdleController {
 
   dispose() {
     // Release offsets immediately when replacing the model, without a blend.
+    this.reverse?.dispose();
     this.leek?.dispose();
     for(const finger of this.fingers)finger.bone.quaternion.copy(finger.rest);
     for (const { pose } of this.body) pose.bone.quaternion.copy(pose.quaternion);

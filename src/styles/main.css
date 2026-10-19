@@ -27,3 +27,6 @@ button:focus-visible, .button:has(+ input:focus-visible) { outline: 2px solid #c
 .credit { color: #adb4b0; font-size: 10px; line-height: 1.6; margin: 8px 0 0; }
 .credit a { color: #c8ddac; text-underline-offset: 2px; }
 @media (max-height: 450px) { header { top: calc(10px + env(safe-area-inset-top)); } .panel { padding: 10px; } .hint { display: none; } }
+
+.credit summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-size: 11px; }
+.credit p { margin: 0 0 4px; }

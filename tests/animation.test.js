@@ -5,6 +5,7 @@ import { Bone, Box3, Group, Matrix4, Vector3 } from 'three';
 import { IdleController } from '../src/viewer/IdleController.js';
 import { SceneManager } from '../src/viewer/SceneManager.js';
 import { ModelManager } from '../src/viewer/ModelManager.js';
+import { loadingStatus } from '../src/ui/loadingStatus.js';
 import { viewerConfig } from '../src/config/viewerConfig.js';
 
 // Reconstruct the supplied asset's actual node hierarchy without decoding images
@@ -216,4 +217,43 @@ test('shoe preset uses ankle center, the model floor and a static fallback', () 
   assert.equal(shoe.max.y,-2+4*viewerConfig.camera.shoes.heightFactor);
   manager.current.idle={};
   assert(manager.getShoeBounds().getCenter(new Vector3()).z===0);
+});
+
+
+test('loading status handles compressed totals, unknown sizes and parsing', () => {
+  assert.equal(loadingStatus('si.glb',{loaded:50,total:100}),'下載 si.glb… 50%');
+  assert.equal(loadingStatus('si.glb',{loaded:100,total:100}),'處理 si.glb 與貼圖…');
+  assert.equal(loadingStatus('si.glb',{loaded:200,total:100}),'處理 si.glb 與貼圖…');
+  for(const total of [0,-1,NaN,Infinity])assert.equal(loadingStatus('si.glb',{loaded:100,total}),'載入 si.glb 與貼圖…');
+  for(const loaded of [-10,0,99.99,100,150,Infinity,NaN]){
+    const text=loadingStatus('si.glb',{loaded,total:100});const number=text.match(/(\d+)%/);
+    if(number)assert(Number(number[1])>=0&&Number(number[1])<=100);
+  }
+});
+
+test('giant onion keeps wrist attached, lands, restores scale and releases resources', () => {
+  const idle=fixture();const r=idle.reverse;
+  assert(idle.playGesture(viewer,'reverse'));
+  for(let j=0;j<120;j++){
+    idle.update(1/30);
+    if(j>30){
+      const wrist=r.stage.worldToLocal(idle.arms.R.end.getWorldPosition(new Vector3()));
+      assert(wrist.distanceTo(r.hand.position)<1e-5);
+      assert(Math.abs(r.actor.scale.x-viewerConfig.idle.reverse.characterScale*r.base.scale.x)<1e-6);
+    }
+  }
+  const before=r.actor.position.clone();idle.stopGesture();
+  assert(r.actor.position.equals(before));
+  assert.equal(idle.playGesture(viewer,'leek'),false,'cannot interrupt landing');
+  idle.update(.1);assert(r.actor.position.distanceTo(before)>1e-4);
+  idle.update(1);assert(r.actor.position.equals(r.base.position));assert(r.actor.scale.equals(r.base.scale));
+  assert.equal(r.visible,false);assert.equal(r.leek.group.visible,false);
+  assert(idle.playGesture(viewer,'reverse'));idle.update(1);
+  let freed=0;for(const resource of [r.material,r.faceMaterial,r.limbGeometry,r.sphereGeometry])resource.addEventListener('dispose',()=>freed++);
+  idle.dispose();assert.equal(freed,4);assert(r.actor.position.equals(r.base.position));assert(r.actor.scale.equals(r.base.scale));assert.equal(r.host.parent,null);assert.equal(r.ink.parent,null);
+});
+
+test('reverse actor has the same pose at 15/30/60fps after entry', () => {
+  const states=[15,30,60].map(fps=>{const idle=fixture();idle.playGesture(viewer,'reverse');for(let j=0;j<3*fps;j++)idle.update(1/fps);return {body:pose(idle),position:idle.reverse.actor.position.toArray(),quaternion:idle.reverse.actor.quaternion.toArray()}});
+  for(const state of states.slice(1)){close(state.body,states[0].body);assert(state.position.every((v,j)=>Math.abs(v-states[0].position[j])<1e-5));assert(state.quaternion.every((v,j)=>Math.abs(v-states[0].quaternion[j])<1e-5));}
 });

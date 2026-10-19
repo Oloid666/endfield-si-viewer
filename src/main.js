@@ -1,4 +1,5 @@
 import './styles/main.css';
+import { loadingStatus } from './ui/loadingStatus.js';
 import { viewerConfig } from './config/viewerConfig.js';
 import { SceneManager } from './viewer/SceneManager.js';
 import { ModelManager } from './viewer/ModelManager.js';
@@ -25,13 +26,14 @@ let previousGestureState;
 
 function syncGestureButtons() {
   const idle = models?.current?.idle;
-  const active = idle?.gestureTime != null ? idle.gestureKind : '';
+  const active = idle?.gestureTime != null ? idle.gestureKind : idle?.reverse?.landing ? 'landing' : '';
+  if ((previousGestureState?.endsWith(':reverse') || previousGestureState?.endsWith(':landing')) && !active) camera?.reset();
   const state = `${!!idle?.head}:${active}`;
   if (state === previousGestureState) return;
   previousGestureState = state;
   for (const button of gestureButtons) {
-    button.disabled = !idle?.head || (!!active && !(active === 'leek' && button.dataset.gesture === 'leek'));
-    button.textContent = active === 'leek' && button.dataset.gesture === 'leek' ? '2 · 停止甩蔥' : gestureLabels.get(button) + (active === button.dataset.gesture ? '…' : '');
+    button.disabled = !idle?.head || (!!active && !(['leek','reverse'].includes(active) && button.dataset.gesture === active));
+    button.textContent = ['leek','reverse'].includes(active) && button.dataset.gesture === active ? (active==='leek'?'2 · 停止甩蔥':'4 · 停止蔥甩蔥') : gestureLabels.get(button) + (active === button.dataset.gesture ? '…' : '');
     button.setAttribute('aria-pressed', String(active === button.dataset.gesture));
     button.setAttribute('aria-label', button.textContent);
     button.setAttribute('aria-busy', String(active === button.dataset.gesture));
@@ -66,10 +68,11 @@ async function loadModel(url, label, isDefault = false) {
   try {
     const model = await models.load(url, (event) => {
       if (id !== requestId) return;
-      showStatus(event.total ? `載入 ${label}… ${Math.round(event.loaded / event.total * 100)}%` : `載入 ${label} 與貼圖…`);
+      showStatus(loadingStatus(label, event));
     });
     if (!model || id !== requestId) return;
     document.querySelector('#model-credit').hidden = !isDefault;
+    document.querySelector('#model-credit').open = false;
     camera.setModel(model.bounds, models.getShoeBounds());
     shoeButton.disabled = false;
     syncShoeButton();
@@ -127,8 +130,8 @@ try {
     syncShoeButton();
   });
   for (const button of gestureButtons) button.addEventListener('click', () => {
-    if (button.dataset.gesture === 'leek' && models.current?.idle.gestureKind === 'leek' && models.current.idle.gestureTime !== null) models.stopGesture();
-    else models.playGesture(scene.camera.position, button.dataset.gesture);
+    if (['leek','reverse'].includes(button.dataset.gesture) && models.current?.idle.gestureKind === button.dataset.gesture && models.current.idle.gestureTime !== null) models.stopGesture();
+    else if (models.playGesture(scene.camera.position, button.dataset.gesture) && button.dataset.gesture==='reverse') camera.showStage(models.getReverseBounds());
     syncGestureButtons();
   });
   fileInput.addEventListener('change', async () => {
