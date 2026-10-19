@@ -39,7 +39,7 @@ export class ModelManager {
 
   setIdlePlaying(playing) { this.current?.idle.setPlaying(playing); }
 
-  playGesture(cameraPosition) { this.current?.idle.playGesture(cameraPosition); }
+  playGesture(cameraPosition, kind) { return this.current?.idle.playGesture(cameraPosition, kind); }
 
   release(root) {
     const geometries = new Set();
