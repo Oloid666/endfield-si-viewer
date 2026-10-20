@@ -1,6 +1,8 @@
 import { Box3, Group, Vector3 } from 'three';
 import { IdleController } from './IdleController.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { LoaderUtils } from 'three';
+import { transferGLB } from './ModelTransfer.js';
 
 export class ModelManager {
   constructor(scene, config) {
@@ -11,9 +13,17 @@ export class ModelManager {
     this.current = null;
   }
 
-  async load(url, onProgress) {
+  async load(url, onProgress, options = {}) {
     const id = ++this.requestId;
-    const gltf = await this.loader.loadAsync(url, onProgress);
+    this.download?.abort();this.download=new AbortController();
+    let gltf;
+    if (/\.glb(?:[?#]|$)/i.test(url)||url.startsWith('blob:')) {
+      const buffer=await transferGLB(url,onProgress,{...this.config.modelTransfer,asset:null,...options,signal:this.download.signal});
+      if(id!==this.requestId)return null;
+      options.onState?.('parse');
+      const absolute=new URL(url,globalThis.location?.href||'http://localhost/').href;
+      gltf=await this.loader.parseAsync(buffer,LoaderUtils.extractUrlBase(absolute));
+    } else gltf=await this.loader.loadAsync(url,onProgress);
     const group = new Group();
     const actor = new Group();
     actor.name = 'si-actor';
@@ -119,5 +129,5 @@ export class ModelManager {
     this.current = null;
   }
 
-  dispose() { ++this.requestId; this.clear(); }
+  dispose() { ++this.requestId; this.download?.abort();this.clear(); }
 }

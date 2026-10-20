@@ -20,6 +20,10 @@ const faceControls = document.querySelector('#face-controls');
 const expressionButtons = [...document.querySelectorAll('[data-expression]')];
 const strengthInput = document.querySelector('#expression-strength');
 const gazeSelect = document.querySelector('#gaze-mode');
+const loadPanel=document.querySelector('#load-panel');
+const loadTitle=document.querySelector('#load-title');
+const loadDetail=document.querySelector('#load-detail');
+const loadProgress=document.querySelector('#load-progress');
 strengthInput.max = String(viewerConfig.face.maxStrength*100);
 const faceHint = document.querySelector('#face-hint');
 let expressionSelection = 'neutral';
@@ -111,11 +115,24 @@ async function loadModel(url, label, isDefault = false) {
   actionPanel.cancel();
   dialogue?.cancel();photography?.reset();
   showStatus(`載入 ${label}…`);
+  loadPanel.hidden=false;loadTitle.textContent=isDefault?'正在下載祀':`正在載入 ${label}`;
+  loadProgress.removeAttribute('value');loadProgress.hidden=false;
+  const asset=isDefault&&viewerConfig.modelTransfer.asset?.path===viewerConfig.modelPath?viewerConfig.modelTransfer.asset:null;
+  const zipped=asset&&typeof DecompressionStream==='function';
+  loadDetail.textContent=asset?`首次下載約 ${((zipped?asset.gzipBytes:asset.bytes)/1e6).toFixed(2)} MB；成功後會快取在此瀏覽器。`:'正在讀取模型與貼圖…';
   try {
     const model = await models.load(url, (event) => {
       if (id !== requestId) return;
       showStatus(loadingStatus(label, event));
-    });
+      const loaded=(event.loaded/1e6).toFixed(2),total=event.total>0?(event.total/1e6).toFixed(2):null;
+      loadDetail.textContent=total?`已下載 ${loaded} / ${total} MB`:`已下載 ${loaded} MB`;
+      if(event.total>0){loadProgress.max=100;loadProgress.value=Math.min(100,event.loaded/event.total*100);}
+    },{asset,compressedUrl:zipped?`${import.meta.env.BASE_URL}${asset.gzipPath}`:null,onState:state=>{
+      if(id!==requestId)return;
+      const messages={retry:'連線中斷，正在重新下載…',cached:'正在讀取本機快取…',decompress:'正在解壓縮模型…',parse:'正在處理模型與貼圖…'};
+      loadTitle.textContent=messages[state]||'正在載入模型…';showStatus(loadTitle.textContent);
+      if(state==='retry'){loadProgress.removeAttribute('value');loadDetail.textContent='已重新連線；也可直接選手機裡的 GLB。';}
+    }});
     if (!model || id !== requestId) return;
     document.querySelector('#model-credit').hidden = !isDefault;
     document.querySelector('#model-credit').open = false;
@@ -136,10 +153,14 @@ async function loadModel(url, label, isDefault = false) {
     idleButton.textContent = model.idle.supported ? '暫停待機' : '模型不支援待機';
     idleButton.setAttribute('aria-pressed', String(model.idle.supported));
     showStatus(isDefault ? '祀 · 載入完成' : `${label} · 載入完成`);
+    loadPanel.hidden=true;
   } catch (error) {
     if (id !== requestId) return;
     console.error('Model load failed:', error);
-    showStatus(`無法載入 ${label}。請上傳有效、內嵌貼圖的 GLB；若使用外部資源，請檢查路徑與檔案。${models.current ? ' 原模型仍可操作。' : ''}`, true);
+    const network=error.code==='stalled'||error.code==='timeout'||error.code==='http'||error instanceof TypeError;
+    loadTitle.textContent=network?'下載連線中斷':'模型載入失敗';loadProgress.hidden=true;
+    loadDetail.textContent=network?'已停止空等。可按重新下載，或直接選手機裡的 GLB。':'請重試，或選有效、內嵌貼圖的 GLB 檔案。';
+    showStatus(`${loadTitle.textContent}。${models.current?'原模型仍可操作。':'請重試或載入本機 GLB。'}`,true);
   }
 }
 
@@ -238,11 +259,15 @@ try {
     try { await loadModel(url, file.name); }
     finally { URL.revokeObjectURL(url); }
   });
+  document.querySelector('#retry-model').addEventListener('click',()=>loadModel(`${import.meta.env.BASE_URL}${viewerConfig.modelPath}`,'si.glb',true));
   loadModel(`${import.meta.env.BASE_URL}${viewerConfig.modelPath}`, 'si.glb', true);
 } catch (error) {
   console.error(error);
   showStatus('無法啟動 WebGL 3D 顯示。請使用支援 WebGL 的 Safari／Chrome／Edge，並確認硬體加速可用。', true);
   fileInput.disabled = true;
+  loadPanel.hidden=false;loadTitle.textContent='無法啟動 3D 顯示';loadProgress.hidden=true;
+  loadDetail.textContent='請使用支援 WebGL 的 Safari／Chrome／Edge，並確認硬體加速可用。';
+  document.querySelector('#retry-model').disabled=true;
   scene?.dispose();
 }
 

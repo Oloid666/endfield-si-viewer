@@ -11,6 +11,13 @@
     <main id="app">
       <div id="viewport" aria-label="3D 模型展示區"></div>
       <header><p>ARKNIGHTS: ENDFIELD</p><h1>祀 <span>Si</span></h1></header>
+      <section id="load-panel" aria-label="模型載入">
+        <h2 id="load-title">正在載入祀</h2>
+        <progress id="load-progress" aria-label="模型下載進度"></progress>
+        <p id="load-detail">首次開啟需下載模型，請稍候。</p>
+        <div class="actions"><button id="retry-model">重新下載</button><label class="button" for="model-file">載入手機裡的 GLB</label></div>
+        <p class="hint">已有模型檔？選手機裡的 GLB，可跳過網路下載。</p>
+      </section>
       <section class="panel" aria-label="模型操作" data-expanded="false">
         <div class="panel-heading">
           <p id="status" role="status" aria-live="polite">準備載入模型…</p>

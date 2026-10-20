@@ -5,6 +5,8 @@ const faceFrame = (time, values={}) => ({time,yaw:0,pitch:0,roll:0,eyeYaw:0,lid:
 // Distances are fractions of model height; rotations are radians.
 export const viewerConfig = { interactions: interactionConfig, background: 0x242629,
   modelPath: 'models/si.glb',
+  modelTransfer: { idleTimeoutMs: 15000, totalTimeoutMs: 120000, retries: 1,
+    asset: typeof __DEFAULT_MODEL_ASSET__ !== 'undefined' ? __DEFAULT_MODEL_ASSET__ : null },
   renderer: { maxPixelRatio: 1.5, antialias: true },
   camera:
    { fov: 40,

@@ -113,3 +113,10 @@ header { z-index: 2; }
 .system-card small, .system-card span, .system-card b { display: block; }.system-card small { font-size: 10px; color: #bbc58d; letter-spacing: .12em; }.system-card span { font-size: 13px; margin: 8px 0; }.system-card b { font-size: 17px; color: #c6d59e; }.system-card[data-final="true"][data-kind="angry"] b,.system-card[data-final="true"][data-kind="proud"] b { color: #edaa88; }
 #app:has(.panel[data-expanded="true"]) .system-card { bottom: calc(min(38dvh, 360px) + 30px + env(safe-area-inset-bottom)); }
 @media (max-height: 450px) { .story-choice { width: min(480px,calc(100% - 36px)); padding: 12px 16px; }.story-choice > p { margin: 6px 0; }.story-choice button { min-height: 46px; margin-top: 6px; }.viewer-speech { top: calc(18px + env(safe-area-inset-top)); left: auto; right: 16px; transform: none; max-width: 58%; font-size: 15px; }.system-card { width: 250px; bottom: 16px !important; }.contract-card { top: 25px; }.contract-card.is-small { top: 12px; } }
+
+#load-panel { position: absolute; z-index: 3; left: 50%; top: 45%; transform: translate(-50%,-50%); width: min(360px,calc(100% - 32px)); padding: 20px; background: #202725f5; border: 1px solid #bdc99e66; border-left: 3px solid #c8ddac; color: #e8eddf; }
+#load-panel h2 { margin: 0 0 16px; font-size: 20px; font-weight: 500; }
+#load-panel progress { width: 100%; height: 9px; accent-color: #c8ddac; }
+#load-detail { font-size: 13px; line-height: 1.7; color: #cbd1c4; min-height: 44px; }
+#load-panel .actions { gap: 8px; } #load-panel button, #load-panel .button { border-radius: 3px; }
+@media(max-height:450px) { #load-panel { top: 50%; width: min(420px,calc(100% - 32px)); padding: 14px; } #load-panel h2 { margin-bottom: 8px; } #load-detail { min-height: auto; margin: 8px 0; } }
