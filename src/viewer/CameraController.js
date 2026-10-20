@@ -6,7 +6,8 @@ export class CameraController {
     this.camera = camera;
     this.config = config;
     this.controls = new OrbitControls(camera, element);
-    this.onInteraction = () => { this.transition = null; this.stopShoeOrbit(); };
+    this.shoeLevel=0;this.story=null;
+    this.onInteraction = () => { this.transition=null;this.stopShoeOrbit();if(this.story)this.story.manual=true; };
     this.controls.addEventListener('start', this.onInteraction);
     Object.assign(this.controls, {
       enableDamping: true,
@@ -22,9 +23,9 @@ export class CameraController {
     this.camera.setViewOffset(width, height, (right - left) / 2, (bottom - top) / 2, width, height);
   }
 
-  frame(bounds, preserveView = false) {
+  frame(bounds, preserveView = false, directionOverride = null) {
     this.transition = null;
-    const direction = preserveView ? this.camera.position.clone().sub(this.controls.target).normalize() : new Vector3(0, 0, 1);
+    const direction = directionOverride || (preserveView ? this.camera.position.clone().sub(this.controls.target).normalize() : new Vector3(0, 0, 1));
     const zoom = preserveView && this.fitDistance ? this.camera.position.distanceTo(this.controls.target) / this.fitDistance : 1;
     const pan = preserveView && this.bounds ? this.controls.target.clone().sub(this.bounds.getCenter(new Vector3())) : new Vector3();
     // Flush any remaining damping before replacing the view.
@@ -64,37 +65,61 @@ export class CameraController {
   setModel(bounds, shoeBounds) {
     this.stopShoeOrbit();
     this.modelBounds = bounds.clone();
-    this.shoeBounds = shoeBounds?.clone();
+    this.shoeLevel=0;this.story=null;
+    this.shoePresets=Array.isArray(shoeBounds)?shoeBounds.map(b=>b.clone()):[];
+    if(!Array.isArray(shoeBounds)&&shoeBounds)this.shoePresets=this.config.camera.shoes.stages.map((stage,i)=>{const b=shoeBounds.clone();if(i)b.expandByScalar(-Math.min(...b.getSize(new Vector3()).toArray())*i*.12);return b;});
+    this.shoeBounds=this.shoePresets[0];
     this.frame(bounds);
   }
 
-  showStage(bounds, smooth = false) {
-    if (!bounds) return;
-    const startPosition = this.camera.position.clone(), startTarget = this.controls.target.clone();
-    this.stopShoeOrbit(); this.frame(bounds);
-    if (smooth) {
-      this.transition = { time: 0, startPosition, startTarget, endPosition: this.camera.position.clone(), endTarget: this.controls.target.clone() };
-      this.camera.position.copy(startPosition); this.controls.target.copy(startTarget);
+  showStage(bounds, smooth=false, preserveDirection=false) {
+    if(!bounds)return;
+    const startPosition=this.camera.position.clone(),startTarget=this.controls.target.clone();
+    const direction=preserveDirection?startPosition.clone().sub(startTarget).normalize():null;
+    this.stopShoeOrbit();this.shoeLevel=0;this.frame(bounds,false,direction);
+    if(smooth){
+      this.transition={time:0,startPosition,startTarget,endPosition:this.camera.position.clone(),endTarget:this.controls.target.clone()};
+      this.camera.position.copy(startPosition);this.controls.target.copy(startTarget);
     }
   }
-
-  startShoeOrbit() {
-    if (!this.shoeBounds) return false;
-    this.stopShoeOrbit();
-    this.frame(this.shoeBounds);
-    this.controls.autoRotateSpeed = 60 / this.config.camera.shoes.lapSeconds;
-    this.controls.autoRotate = true;
-    return true;
+  advanceShoeView(){
+    const next=(this.shoeLevel+1)%4;
+    if(!next){this.reset(true);return 0;}
+    const bounds=this.shoePresets[next-1];if(!bounds)return this.shoeLevel;
+    this.story=null;this.showStage(bounds,true,true);this.shoeLevel=next;
+    this.controls.autoRotateSpeed=60/this.config.camera.shoes.stages[next-1].lapSeconds;
+    if(this.transition)this.transition.resumeOrbit=true;else this.controls.autoRotate=true;
+    return next;
   }
-
-  stopShoeOrbit() { this.controls.autoRotate = false; }
-  get shoeOrbitActive() { return this.controls.autoRotate; }
-
-  reset() {
-    this.stopShoeOrbit();
-    if (this.modelBounds || this.bounds) this.frame(this.modelBounds || this.bounds);
+  startShoeOrbit(){this.shoeLevel=0;return this.advanceShoeView()>0;}
+  stopShoeOrbit(){this.controls.autoRotate=false;if(this.transition)this.transition.resumeOrbit=false;}
+  get shoeOrbitActive(){return !!(this.controls.autoRotate||this.transition?.resumeOrbit);}
+  startStory(kind){this.story={kind,shot:'',manual:false};this.stopShoeOrbit();this.shoeLevel=0;}
+  updateStory(idle,models){
+    if(!this.story||this.story.manual||idle?.gestureTime==null)return;
+    const kind=this.story.kind,t=idle.gestureTime,c=this.config.idle;
+    let shot='full',bounds=models.current.bounds;
+    if(kind==='leek'){
+      if(t<c.leekStory.beats.dance){shot='drawing';bounds=models.getDrawingBounds(kind);}
+      else if(t>=c.leekStory.beats.pose){shot='reaction';bounds=models.getReactionBounds();}
+    }else if(kind==='reverse'){
+      shot='wide';bounds=models.getReverseBounds();
+      if(t<c.reverse.beats.limbs){shot='drawing';bounds=models.getDrawingBounds(kind);}
+      if(t>=c.reverse.beats.release&&t<c.reverse.beats.windmill){shot='fake-ending';bounds=models.current.bounds;}
+    }else if(t>=4.7&&t<6.5||t>=8.7){shot='caught';bounds=models.getFaceBounds();}
+    if(shot!==this.story.shot){this.story.shot=shot;this.showStage(bounds,true);}
   }
-  resize() { if (this.bounds) this.frame(this.bounds, true); }
+  endStory(){const manual=this.story?.manual;this.story=null;if(!manual)this.reset(true);}
+
+  reset(smooth=false) {
+    this.stopShoeOrbit();this.shoeLevel=0;
+    if(this.modelBounds||this.bounds)this.showStage(this.modelBounds||this.bounds,smooth);
+  }
+  resize() {
+    if(!this.bounds)return;
+    if(this.transition){const level=this.shoeLevel,resume=this.transition.resumeOrbit;this.showStage(this.bounds,true);this.shoeLevel=level;if(this.transition)this.transition.resumeOrbit=resume;}
+    else this.frame(this.bounds,true);
+  }
   update(delta) {
     if (this.transition) {
       const t = this.transition;
@@ -102,7 +127,7 @@ export class CameraController {
       const weight = MathUtils.smoothstep(t.time, 0, .55);
       this.camera.position.lerpVectors(t.startPosition, t.endPosition, weight);
       this.controls.target.lerpVectors(t.startTarget, t.endTarget, weight);
-      if (weight === 1) this.transition = null;
+      if (weight === 1) { const resume=t.resumeOrbit;this.transition=null;if(resume)this.controls.autoRotate=true; }
     }
     this.controls.update(delta);
   }

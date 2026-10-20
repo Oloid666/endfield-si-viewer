@@ -82,3 +82,9 @@ header { z-index: 2; }
 .ink-question { position: absolute; top: 28%; left: 22%; z-index: 3; font: 700 40px serif; color: #263b2b; pointer-events: none; }
 
 #app[data-ink-paper="true"] header, #app[data-ink-paper="true"] header p, #app[data-ink-paper="true"] h1 span { color: #314832; }
+
+.ink-caption { font-size: 20px; line-height: 1.45; max-width: calc(100% - 32px); }
+.ink-caption small { display: block; font: 11px/1.6 -apple-system, sans-serif; opacity: .72; text-align: left; }
+.ink-caption.is-stamp { border: 2px solid #b65d49; color: #f0b19c; transform: translateX(-50%) rotate(-5deg); }
+#shoe-status { position: absolute; top: calc(100px + env(safe-area-inset-top)); left: calc(20px + env(safe-area-inset-left)); z-index: 3; font-size: 12px; color: #cadbb6; pointer-events: none; background: #20271ed9; padding: 4px 8px; border-radius: 5px; }
+@media (max-height: 450px) { .ink-caption { bottom: calc(62px + env(safe-area-inset-bottom)); font-size: 17px; } }

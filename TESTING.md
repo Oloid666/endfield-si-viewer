@@ -175,3 +175,9 @@ Build 唯一提示是主要 JS chunk 約 597 kB（gzip 約 153 kB），包含 Th
 - `npm test`: 25 passing tests. New checks cover the three-tuft merged crown, bent stem, surface-conforming face geometry, independent expression UV selection, three shared-map dancers, delayed beat, playing dead and clean cancellation/disposal.
 - Repository-subpath production build passes. Chromium real-GLB mobile/landscape checks cover story framing, repeat-play resource stability and full GPU geometry/texture disposal after model clearing.
 - Physical iPhone Safari and hardware FPS remain untested.
+
+## Brush drawing / four-stage shoe camera / automatic menu return
+
+- 32 Node tests pass, including three distinct shoe magnifications and fourth-click restoration, manual orbit interruption retaining the level, panel settling/override, world-fixed strokes and exact brush-tip alignment, and a half-painted giant's 1.5-second stare.
+- Repository-subpath production build passes. Browser checks use the actual decoded GLB, with brush/ink captures, three shoe framing captures, mobile/landscape, menu auto-fold/return/scroll/manual override, action completion and resource disposal.
+- Physical iPhone Safari and hardware FPS remain untested.

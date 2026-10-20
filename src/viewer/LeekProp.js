@@ -19,6 +19,7 @@ export class LeekProp {
     this.group.quaternion.copy(hand.getWorldQuaternion(new Quaternion()).invert());
     this.group.position.copy(hand.worldToLocal(palm.getWorldPosition(new Vector3()))).multiplyScalar(.7);
     hand.add(this.group);
+    this.restPosition=this.group.position.clone();
     this.materials = []; this.geometries = []; this.textures = [];
     this.assets = acquirePaintAssets();
     const texture = this.assets.brush;
@@ -32,15 +33,15 @@ export class LeekProp {
     }
     stem.computeVertexNormals();
     const stemMaterial = new MeshStandardMaterial({color:0xe1e8cc,roughness:1,transparent:true});
-    this.add(stem,stemMaterial);
+    this.stemMesh=this.add(stem,stemMaterial);
     const leafMaterial=new MeshBasicMaterial({vertexColors:true,map:texture,side:DoubleSide,transparent:true,forceSinglePass:true,alphaTest:.08,depthWrite:false});
-    this.add(this.crownGeometry(),leafMaterial);
+    this.crownMesh=this.add(this.crownGeometry(),leafMaterial);
     this.cowlick=new Group();this.cowlick.position.set(this.design.spread*.45,config.stemLength*.68+config.leafLength*.58,0);this.group.add(this.cowlick);
     const cowlickGeometry=this.ribbonGeometry(config.design.cowlick.length,config.design.cowlick.width,.025);
     const cowlickMaterial=new MeshBasicMaterial({color:0x6d8a50,map:texture,side:DoubleSide,transparent:true,forceSinglePass:true,alphaTest:.08,depthWrite:false});
     this.geometries.push(cowlickGeometry);this.materials.push(cowlickMaterial);this.cowlick.add(new Mesh(cowlickGeometry,cowlickMaterial));
     this.cowlick.rotation.z=config.design.cowlick.angle;
-    const roots=new Group();roots.position.set(this.stemBend(0),-config.stemLength*.15,0);this.group.add(roots);
+    const roots=this.roots=new Group();roots.position.set(this.stemBend(0),-config.stemLength*.15,0);this.group.add(roots);
     const rootGeometry=this.ribbonGeometry(.025,.0016,.009);
     const rootMaterial=new MeshBasicMaterial({color:0x5d6046,map:texture,side:DoubleSide,transparent:true,forceSinglePass:true,alphaTest:.08});
     // Three whiskers are merged into one mesh, keeping the silhouette inexpensive.
@@ -73,7 +74,25 @@ export class LeekProp {
     this.trail=new Mesh(this.trailGeometry,this.trailMaterial);this.trail.name='si-ink-trail';this.trail.frustumCulled=false;this.trail.visible=false;root.add(this.trail);
   }
 
-  add(geometry,material){this.geometries.push(geometry);this.materials.push(material);this.group.add(new Mesh(geometry,material));}
+  add(geometry,material){this.geometries.push(geometry);this.materials.push(material);const mesh=new Mesh(geometry,material);this.group.add(mesh);return mesh;}
+
+  setReveal(progress){
+    const p=MathUtils.clamp(progress,0,1);
+    const stem=this.stemMesh.geometry,crown=this.crownMesh.geometry;
+    if(!this.sortedStem){
+      const indices=Array.from(stem.index.array),position=stem.getAttribute('position'),triangles=[];
+      for(let i=0;i<indices.length;i+=3)triangles.push(indices.slice(i,i+3));
+      triangles.sort((a,b)=>a.reduce((sum,j)=>sum+position.getY(j),0)-b.reduce((sum,j)=>sum+position.getY(j),0));
+      stem.setIndex(triangles.flat());this.sortedStem=true;
+    }
+    stem.setDrawRange(0,Math.floor(Math.min(1,p/.3)*stem.index.count/3)*3);
+    crown.setDrawRange(0,Math.floor(MathUtils.clamp((p-.3)/.7,0,1)*crown.index.count/3)*3);
+    this.cowlick.visible=p>.94;this.roots.visible=p>.3;
+  }
+  placeAt(world,weight){
+    this.group.position.copy(this.restPosition);
+    if(weight>0){this.local.copy(world);this.hand.worldToLocal(this.local);this.group.position.lerp(this.local,weight);}
+  }
 
   stemRadius(t){return this.config.stemRadius*this.design.radius*(.82+.26*(1-t)**2);}
   stemBend(t){return this.design.bend*(t*t-.25*t);}

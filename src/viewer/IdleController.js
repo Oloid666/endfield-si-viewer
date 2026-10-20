@@ -3,6 +3,7 @@ import { LimbSolver } from './LimbSolver.js';
 import { LeekProp } from './LeekProp.js';
 import { FaceController } from './FaceController.js';
 import { GazeController } from './GazeController.js';
+import { BrushDrawing } from './BrushDrawing.js';
 import { LeekChorus } from './LeekChorus.js';
 import { InkStage } from './InkStage.js';
 import { leekBeat, reverseBeat, ramp } from './actionTimeline.js';
@@ -118,6 +119,7 @@ export class IdleController {
     }
     if (this.arms) {
       this.reverse = new ReverseLeekController(actor,this.arms.R.end,bounds,this.height,config.reverse,config.prop);
+      this.drawing=new BrushDrawing(this.reverse.stage,bounds,this.height,config.drawing,config.prop,config.reverse,this.leek.textures[0]||null);
       this.chorus = new LeekChorus(this.reverse.stage,bounds,this.height,config.chorus,config.prop);
       this.inkStage = new InkStage(this.reverse.stage,bounds,this.height,config.theater,this.leek.textures[0]||null);
     }
@@ -225,11 +227,25 @@ export class IdleController {
     this.orientHand(arm,this.direction.set(0,-1,.12).normalize(),amount);
   }
 
-  plantFeet(lift=0, forward=0) {
+  reachWorldHand(side,target,amount=1){
+    const arm=this.arms[side];arm.end.getWorldPosition(this.anchor);this.anchor.lerp(target,amount);
+    this.pointFromHips(this.config.drawing.penPole,this.pole);arm.solve(this.anchor,this.pole);
+    this.orientHand(arm,this.direction.set(0,1,.2).normalize(),amount);
+  }
+  applyDrawing(kind,seconds){
+    const weight=ramp(seconds,0,.45)*(1-ramp(seconds,this.config.drawing.smallEnd,this.config.drawing.takeEnd));
+    const amount=kind==='reverse'?ramp(seconds,0,.45)*(1-ramp(seconds,this.config.reverse.beats.grab,this.config.reverse.beats.swing)):weight;
+    this.drawing.getHandTarget(kind,seconds,this.target);this.reachWorldHand('R',this.target,amount);
+    this.reachHand('L',this.config.action.waistHands[0],this.config.action.elbowPoles[0],amount);
+    for(const finger of this.fingers)finger.bone.quaternion.copy(finger.rest).multiply(this.axisOffset.setFromAxisAngle(finger.axis,(finger.side==='R'?.85:.2)*amount));
+    this.plantFeet();
+  }
+
+  plantFeet(lift=0, forward=0, lateral=0) {
     for(const side of ['L','R']) {
       const {solver,anchor,rotation}=this.legs[side];
       this.anchor.copy(anchor);
-      if(side==='R'){this.anchor.y+=lift*this.height;this.anchor.z+=forward*this.height;}
+      if(side==='R'){this.anchor.y+=lift*this.height;this.anchor.z+=forward*this.height;this.anchor.x+=lateral*this.height;}
       solver.upper.getWorldPosition(this.pole);this.pole.z+=this.height;
       solver.solve(this.anchor,this.pole);
       solver.end.parent.getWorldQuaternion(this.parentRotation).invert();
@@ -272,7 +288,7 @@ export class IdleController {
     // Wrist-local offsets follow the moving arm instead of moving the prop alone.
     this.offset.setFromAxisAngle(wrist.z,-c.action.leekTilt*swing*weight);
     wrist.bone.quaternion.multiply(this.offset);
-    this.plantFeet();
+    this.plantFeet(Math.max(0,swing)*.018,Math.max(0,swing)*.045,swing*.025);
     for(const finger of this.fingers){const curl=(finger.side==='R'?.95:.22)*weight;
       finger.bone.quaternion.copy(finger.rest).multiply(this.axisOffset.setFromAxisAngle(finger.axis,curl*(finger.segment===0?.7:1)));
     }
@@ -401,6 +417,12 @@ export class IdleController {
       const seconds=this.gestureTime ?? mood.duration, beat=leekBeat(seconds,c.leekStory);
       loopWeight=beat.fade;
       this.applyLeekDance(seconds,loopWeight);
+      if(seconds<c.drawing.takeEnd){
+        this.applyDrawing('leek',seconds);
+        if(seconds>=c.drawing.smallEnd){
+          this.drawing.origin('leek',this.target);this.reachWorldHand('R',this.target,ramp(seconds,c.drawing.smallEnd,c.drawing.takeEnd));
+        }
+      }
       const phase=(seconds-c.leekStory.beats.dance)*Math.PI*2/c.action.leekCycle;
       envelope=loopWeight; faceAmount=.9*loopWeight;
       pitch=-.06*beat.show+.04*beat.dance*Math.cos(phase*2);
@@ -421,6 +443,9 @@ export class IdleController {
       this.applyPose(this.body.find(p=>p.name==='kneeR').pose,(.4+.3*Math.sin(phase))*beat.attached,0,0);
       pitch=-.08*beat.attached; yaw=-.45*(1-beat.attached)*beat.limbs;roll=-.17*Math.sin(phase)*beat.attached;
       eyeYaw=-.15*(1-beat.attached);gestureBlink=0;
+      if(seconds<c.reverse.beats.swing)this.applyDrawing('reverse',seconds);
+      if(seconds>=c.reverse.beats.stare&&seconds<c.reverse.beats.grab){pitch=0;yaw=-.45;roll=0;eyeYaw=-.15;}
+
     }
     this.applyFace(mood, faceAmount, gestureProgress, 1-envelope);
     const useTracking = this.look && this.look.mode !== 'idle';
@@ -450,10 +475,16 @@ export class IdleController {
     this.blendTransition(delta);
     if(mood && this.gestureKind==='reverse' && this.gestureTime===null){this.reverse.update(mood.duration,0);this.reverse.stop();}
     this.reverse?.update(this.gestureTime ?? mood?.duration ?? 0, delta);
-    const leekActive=!!mood && this.gestureKind==='leek' && this.gestureTime!==null;
+    const paintingKind=this.gestureTime!==null?this.gestureKind:'';
+    const paintingTime=this.gestureTime||0;
+    this.drawing?.update(paintingKind,paintingTime,delta,this.arms.R.end,this.reverse);
+    const leekActive=!!mood && this.gestureKind==='leek' && this.gestureTime!==null && this.gestureTime>=c.drawing.revealEnd;
     const leekState=leekBeat(this.gestureTime || 0,c.leekStory);
     const tilt=-c.action.leekTilt*Math.sin(((this.gestureTime || 0)-c.leekStory.beats.dance)*Math.PI*2/c.action.leekCycle)*leekState.dance*leekState.amplitude + .3*leekState.peek;
+    if(leekActive&&paintingTime<c.drawing.takeEnd)this.leek.alpha=1;
     this.leek?.update(leekActive,delta,c.action.leekFade,tilt);
+    if(leekActive){this.drawing.origin('leek',this.target);this.leek.placeAt(this.target,1-ramp(paintingTime,c.drawing.revealEnd,c.drawing.takeEnd));}
+    else this.leek?.placeAt(this.target,0);
     const seconds=this.gestureTime || 0;
     const peekStart=c.leekStory.beats.peek;
     const expression=leekActive && leekState.peek>.1 ? seconds<peekStart+.55?'peek':'dead' : 'hidden';
@@ -485,6 +516,7 @@ export class IdleController {
 
   dispose() {
     // Release offsets immediately when replacing the model, without a blend.
+    this.drawing?.dispose();
     this.chorus?.dispose();
     this.inkStage?.dispose();
     this.reverse?.dispose();

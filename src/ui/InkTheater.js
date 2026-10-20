@@ -11,38 +11,34 @@ export class InkTheater {
     this.paper=document.createElement('div');this.paper.className='ink-paper';this.paper.innerHTML=MOUNTAINS;
     viewport.prepend(this.paper);
     this.caption=document.createElement('div');this.caption.className='ink-caption';this.caption.setAttribute('aria-hidden','true');
+    this.speaker=document.createElement('small');this.caption.append(this.speaker);
     this.line=document.createElement('span');this.seal=document.createElement('b');this.seal.textContent='蔥';
     this.caption.append(this.line,this.seal);parent.append(this.caption);
     this.question=document.createElement('div');this.question.className='ink-question';this.question.textContent='？　？';this.question.setAttribute('aria-hidden','true');parent.append(this.question);
   }
   update(idle,delta){
     const kind=idle?.gestureTime!=null?idle.gestureKind:'',time=idle?.gestureTime||0;
-    const target=kind==='reverse'?1:0;
+    const target=['leek','reverse'].includes(kind)?1:0;
     this.opacity=MathUtils.lerp(this.opacity,target,1-Math.exp(-delta/this.config.paperFade));
     if(this.opacity<.002)this.opacity=0;
     this.paper.style.opacity=String(this.opacity);
     this.parent.dataset.inkPaper=String(this.opacity>.1);
     const mountains=this.paper.firstElementChild;
-    const toss=kind==='reverse'?windowWeight(time,7.55,10,.25):0;
+    const toss=kind==='reverse'?windowWeight(time,idle.config.reverse.beats.windmill,idle.config.reverse.beats.bow,.25):0;
     mountains.style.transform=`translateX(${toss*115}%) rotate(${toss*14}deg)`;
-    let text='',seal=false;
-    if(kind==='reverse'){
-      if(time<1.35)text='起筆，召蔥。';
-      else if(time<2.3)text='……蔥長手了？';
-      else if(time<2.9)text='';
-      else if(time<6.1)text='現在，換蔥示範。';
-      else if(time<7.55)text='好，結束了。';
-      else if(time<9.5)text='還有一下。';
-      else {text='蔥，出於祀，而甩於祀。';seal=true;}
-    }else if(kind==='leek'){
-      text=time<1.3?'本小姐親自示範。':time<5.6?'':time<6.6?'就這？':time<7.9?'……你剛剛是不是動了？':'';
-    }else if(kind==='tsundere'){
-      text=time<1?'哼。':time>4.8&&time<6.35?'誰、誰畫的花！':'';
+    const entry=(this.config.captions[kind]||[]).find(([start,end])=>time>=start&&time<end);
+    let text=entry?.[3]||'',speaker=entry?.[2]||'',seal=false;
+    if(kind==='reverse'&&time>=idle.config.reverse.beats.bow){
+      const full='蔥，出於祀，而甩於祀。';
+      const progress=MathUtils.clamp((time-idle.config.reverse.beats.bow)/(idle.config.reverse.beats.writeEnd-idle.config.reverse.beats.bow),0,1);
+      text=Array.from(full).slice(0,Math.ceil(progress*Array.from(full).length)).join('');speaker='蔥 · 落款';seal=progress>=1;
     }
     if(text!==this.line.textContent)this.line.textContent=text;
+    this.speaker.textContent=speaker;this.speaker.hidden=!speaker;
     this.caption.hidden=!text;
-    this.caption.classList.toggle('is-paper',kind==='reverse');this.seal.hidden=!seal;
-    this.question.hidden=!(kind==='reverse'&&time>=2.3&&time<2.9);
+    this.caption.classList.toggle('is-paper',target===1);this.caption.classList.toggle('is-stamp',kind==='tsundere'&&time>=8.7);
+    this.seal.hidden=!seal;
+    this.question.hidden=!(kind==='reverse'&&time>=idle.config.reverse.beats.stare&&time<idle.config.reverse.beats.grab);
     this.kind=kind;return this.opacity>0;
   }
   dispose(){this.paper.remove();this.caption.remove();this.question.remove();}
