@@ -5,6 +5,8 @@ import { Bone, Box3, Group, Matrix4, Vector3 } from 'three';
 import { IdleController } from '../src/viewer/IdleController.js';
 import { SceneManager } from '../src/viewer/SceneManager.js';
 import { ModelManager } from '../src/viewer/ModelManager.js';
+import { FaceController } from '../src/viewer/FaceController.js';
+import { GazeController } from '../src/viewer/GazeController.js';
 import { loadingStatus } from '../src/ui/loadingStatus.js';
 import { viewerConfig } from '../src/config/viewerConfig.js';
 
@@ -30,7 +32,7 @@ function fixture() {
   for (const root of gltf.scenes[gltf.scene || 0].nodes) scene.add(nodes[root]);
   scene.updateMatrixWorld(true);
   const idle = new IdleController({ scene, parser: { associations } }, viewerConfig.idle,
-    new Box3(new Vector3(-0.5, -1, -0.5), new Vector3(0.5, 1, 0.5)));
+    new Box3(new Vector3(-0.5, -1, -0.5), new Vector3(0.5, 1, 0.5)), undefined, viewerConfig.face, viewerConfig.gaze);
   idle.setPlaying(false);
   idle.update(1);
   return idle;
@@ -256,4 +258,58 @@ test('giant onion keeps wrist attached, lands, restores scale and releases resou
 test('reverse actor has the same pose at 15/30/60fps after entry', () => {
   const states=[15,30,60].map(fps=>{const idle=fixture();idle.playGesture(viewer,'reverse');for(let j=0;j<3*fps;j++)idle.update(1/fps);return {body:pose(idle),position:idle.reverse.actor.position.toArray(),quaternion:idle.reverse.actor.quaternion.toArray()}});
   for(const state of states.slice(1)){close(state.body,states[0].body);assert(state.position.every((v,j)=>Math.abs(v-states[0].position[j])<1e-5));assert(state.quaternion.every((v,j)=>Math.abs(v-states[0].quaternion[j])<1e-5));}
+});
+
+
+test('expression presets blend, clamp strength, widen surprised eyes and return to neutral', () => {
+  const face=new FaceController(viewerConfig.face);
+  assert.equal(face.setExpression('missing',1),false);
+  assert.equal(face.setExpression('angry',NaN),false);
+  face.setExpression('angry',2);assert.equal(face.strength,1);
+  const before=face.values.browLeftInner;face.update(.03);
+  assert(face.values.browLeftInner<before&&face.values.browLeftInner>face.target.browLeftInner);
+  face.setExpression('surprised',.8);face.update(2);assert(face.values.lid<0);
+  face.setExpression('neutral');face.update(2);
+  assert(Object.values(face.values).every(v=>Math.abs(v)<1e-7));
+});
+
+test('selected face works while idle is paused, yields to actions and returns after them', () => {
+  const idle=fixture();assert(idle.expression&&idle.look);
+  const brow=idle.face.find(x=>x.role==='brow'&&x.side==='Left');
+  idle.expression.setExpression('angry',1);idle.update(2);
+  const expressionOffset=brow.bone.position.clone().sub(brow.rest);assert(expressionOffset.length()>1e-4);
+  const neutral=fixture();
+  idle.playGesture(viewer,'tsundere');neutral.playGesture(viewer,'tsundere');
+  idle.update(2);neutral.update(2);
+  const other=neutral.face.find(x=>x.bone.name===brow.bone.name);
+  assert(brow.bone.position.distanceTo(other.bone.position)<1e-7,'authored action has face priority');
+  idle.update(10);assert(brow.bone.position.clone().sub(brow.rest).distanceTo(expressionOffset)<1e-6);
+  const upper=idle.eyelids[0];idle.expression.setExpression('surprised',1);idle.update(2);
+  assert(upper.bone.position.distanceTo(upper.rest)>1e-5);
+  idle.dispose();assert(upper.bone.position.equals(upper.rest));
+});
+
+test('gaze eyes lead the head, respect limits and reject invalid targets', () => {
+  const head=new Group();head.updateMatrixWorld(true);
+  const look=new GazeController(head,viewerConfig.gaze);
+  assert.equal(look.setMode('bad'),false);
+  assert.equal(look.setPoint(new Vector3(NaN,0,1)),false);
+  look.setMode('point');look.setPoint(new Vector3(3,2,1));look.update(1/60);
+  assert(look.angles.eyeYaw>look.angles.headYaw);
+  for(let j=0;j<120;j++)look.update(1/60);
+  const c=viewerConfig.gaze,a=look.angles;
+  assert(Math.abs(a.headYaw)<=c.headYawLimit&&Math.abs(a.eyeYaw)<=c.eyeYawLimit);
+  assert(Math.abs(a.headPitch)<=c.headPitchLimit&&Math.abs(a.eyePitch)<=c.eyePitchLimit);
+  look.setMode('off');look.update(10);
+  assert(Object.values(a).every(v=>Math.abs(v)<1e-10));
+});
+
+test('camera gaze follows the viewer and action head motion keeps priority', () => {
+  const idle=fixture();idle.look.setMode('camera');
+  const origin=idle.head.bone.getWorldPosition(new Vector3());
+  idle.update(1,origin.clone().add(new Vector3(2,0,2)));assert(idle.look.angles.headYaw>0);
+  idle.update(1,origin.clone().add(new Vector3(-2,0,2)));assert(idle.look.angles.headYaw<0);
+  const neutral=fixture();idle.playGesture(viewer,'tsundere');neutral.playGesture(viewer,'tsundere');
+  idle.update(2,origin.clone().add(new Vector3(2,0,2)));neutral.update(2);
+  close([idle.head.bone.quaternion.toArray()],[neutral.head.bone.quaternion.toArray()]);
 });

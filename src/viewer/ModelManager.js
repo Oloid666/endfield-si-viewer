@@ -32,13 +32,28 @@ export class ModelManager {
       group.updateMatrixWorld(true);
       this.clear();
       this.current = { group, gltf, bounds: new Box3().setFromObject(group, true) };
-      this.current.idle = new IdleController(gltf, this.config.idle, this.current.bounds, actor);
+      this.current.idle = new IdleController(gltf, this.config.idle, this.current.bounds, actor, this.config.face, this.config.gaze);
       this.scene.add(group);
       return this.current;
     } catch (error) { this.release(group); throw error; }
   }
 
-  update(delta) { this.current?.idle.update(delta); }
+  update(delta, cameraPosition) { this.current?.idle.update(delta, cameraPosition); }
+
+  setExpression(selection, strength) { return this.current?.idle.expression?.setExpression(selection, strength); }
+  setGazeMode(mode) { return this.current?.idle.look?.setMode(mode); }
+  setGazePoint(point) { return this.current?.idle.look?.setPoint(point); }
+  getGazeAnchor() {
+    const idle = this.current?.idle;
+    return idle?.head ? { position: idle.head.bone.getWorldPosition(new Vector3()), height: idle.height } : null;
+  }
+  getFaceBounds() {
+    const anchor = this.getGazeAnchor();
+    if (!anchor) return null;
+    const preset = this.config.camera.face;
+    anchor.position.y += anchor.height*preset.headOffset;
+    return new Box3().setFromCenterAndSize(anchor.position, new Vector3(preset.width,preset.height,preset.depth).multiplyScalar(anchor.height));
+  }
 
   setIdlePlaying(playing) { this.current?.idle.setPlaying(playing); }
 
