@@ -1,11 +1,14 @@
 import { interactionConfig } from './interactionConfig.js';
+import { characters } from './characters.js';
+import { gameConfig } from './gameConfig.js';
 
 const faceFrame = (time, values={}) => ({time,yaw:0,pitch:0,roll:0,eyeYaw:0,lid:0,viewer:0,face:1,browLeft:-.0009,browRight:-.0004,mouthLeft:-.0005,mouthRight:.0001,cheek:0,...values});
 
 // Distances are fractions of model height; rotations are radians.
-export const viewerConfig = { interactions: interactionConfig, background: 0x242629,
+export const viewerConfig = { characters, game:gameConfig, interactions: interactionConfig, background: 0x242629,
   modelPath: 'models/si.glb',
   modelTransfer: { idleTimeoutMs: 15000, totalTimeoutMs: 120000, retries: 1,
+    assets: typeof __MODEL_ASSETS__ !== 'undefined' ? __MODEL_ASSETS__ : {},
     asset: typeof __DEFAULT_MODEL_ASSET__ !== 'undefined' ? __DEFAULT_MODEL_ASSET__ : null },
   renderer: { maxPixelRatio: 1.5, antialias: true },
   camera:

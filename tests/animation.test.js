@@ -7,6 +7,7 @@ import { PhotographyController } from '../src/viewer/PhotographyController.js';
 import { ViewerDialogue, expressionBand } from '../src/ui/ViewerDialogue.js';
 import { reverseBeat } from '../src/viewer/actionTimeline.js';
 import { ActionPanel } from '../src/ui/ActionPanel.js';
+import { GameStage } from '../src/game/GameStage.js';
 import { IdleController } from '../src/viewer/IdleController.js';
 import { SceneManager } from '../src/viewer/SceneManager.js';
 import { ModelManager } from '../src/viewer/ModelManager.js';
@@ -17,14 +18,14 @@ import { viewerConfig } from '../src/config/viewerConfig.js';
 
 // Reconstruct the supplied asset's actual node hierarchy without decoding images
 // or requiring WebGL. Browser checks separately exercise the skinned meshes/UI.
-function fixture() {
-  const bytes = readFileSync(new URL('../public/models/si.glb', import.meta.url));
+function fixture(file = 'si.glb') {
+  const bytes = readFileSync(new URL(`../public/models/${file}`, import.meta.url));
   const gltf = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)));
   const joints = new Set(gltf.skins.flatMap((skin) => skin.joints));
   const associations = new Map();
   const nodes = gltf.nodes.map((node, index) => {
     const object = joints.has(index) ? new Bone() : new Group();
-    object.name = node.name || '';
+    object.name = node.name || ''; object.userData.gltfIndex=index;
     if (node.matrix) new Matrix4().fromArray(node.matrix).decompose(object.position, object.quaternion, object.scale);
     if (node.translation) object.position.fromArray(node.translation);
     if (node.rotation) object.quaternion.fromArray(node.rotation);
@@ -609,4 +610,26 @@ test('rejected pride visibly loses its smile and restores the selected expressio
   idle.dialogueReaction={selection:'proud'};idle.update(1);
   assert(mouth.bone.position.distanceTo(mouth.rest)<offset*.2);assert(idle.eyelids[0].bone.position.equals(idle.eyelids[0].rest));
   idle.dialogueReaction=null;idle.update(1);assert(Math.abs(mouth.bone.position.distanceTo(mouth.rest)-offset)<1e-8);idle.dispose();
+});
+
+
+test('game dance loops beyond the authored short without triggering its ending or a choice',()=>{
+ const idle=fixture(),stage=new GameStage({current:{idle}});assert(stage.start(viewer));
+ for(let t=0;t<65;t+=.1){stage.prepare(t,'leek');idle.update(.1,viewer);stage.afterUpdate(.1,t,'leek');assert(idle.gestureTime!==null);assert.equal(idle.reverseChoice,null);}
+ stage.stop();idle.update(1);assert.equal(idle.gestureTime,null);assert.equal(idle.gameClock,null);assert(!idle.leek.group.visible);idle.dispose();
+});
+test('game takeover uses the actual wrist grip and fully restores the actor when leaving',()=>{
+ const idle=fixture(),stage=new GameStage({current:{idle}});assert(stage.start(viewer));
+ stage.prepare(14,'reverse');idle.update(1,viewer);stage.afterUpdate(.1,14,'reverse');
+ const r=idle.reverse,wrist=r.stage.worldToLocal(idle.arms.R.end.getWorldPosition(new Vector3()));
+ assert(wrist.distanceTo(r.hand.position)<1e-5);assert(r.active);assert(r.ink.visible);assert.equal(idle.reverseChoice,null);
+ stage.stop();idle.update(1);assert(r.actor.position.equals(r.base.position));assert(r.actor.scale.equals(r.base.scale));assert(!r.active&&!r.visible);idle.dispose();
+});
+test('Zhuang view anchors enable close-up and three shoe presets without applying Si animation',()=>{
+ const idle=fixture('zhuang-fangyi.glb');assert.equal(idle.supported,false);assert.equal(idle.head,undefined);
+ const byNode=id=>{let found;idle.root.traverse(node=>{if(node.userData.gltfIndex===id)found=node;});return found;};
+ const manager=new ModelManager(new Group(),viewerConfig);manager.current={idle,bounds:new Box3(new Vector3(-.5,-1,-.5),new Vector3(.5,1,.5)),viewAnchors:{head:byNode(83),feet:[byNode(57),byNode(35)]}};
+ assert(manager.getGazeAnchor().position.equals(byNode(83).getWorldPosition(new Vector3())));assert(manager.getFaceBounds());
+ const shoes=manager.getShoePresets();assert.equal(shoes.length,3);assert(shoes[0].getSize(new Vector3()).length()>shoes[1].getSize(new Vector3()).length());assert(shoes[1].getSize(new Vector3()).length()>shoes[2].getSize(new Vector3()).length());
+ idle.dispose();
 });

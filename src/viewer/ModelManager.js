@@ -41,7 +41,11 @@ export class ModelManager {
       group.position.copy(bounds.getCenter(new Vector3())).negate();
       group.updateMatrixWorld(true);
       this.clear();
-      this.current = { group, gltf, bounds: new Box3().setFromObject(group, true) };
+      this.current = { group, gltf, bounds: new Box3().setFromObject(group, true), characterId:options.characterId||null };
+      if(options.viewNodes){
+        const byNode=id=>{let found;gltf.scene.traverse(node=>{if(gltf.parser.associations.get(node)?.nodes===id)found=node;});return found;};
+        this.current.viewAnchors={head:byNode(options.viewNodes.head),feet:options.viewNodes.feet.map(byNode).filter(Boolean)};
+      }
       this.current.idle = new IdleController(gltf, this.config.idle, this.current.bounds, actor, this.config.face, this.config.gaze, this.config.interactions.photography);
       this.scene.add(group);
       return this.current;
@@ -55,7 +59,8 @@ export class ModelManager {
   setGazePoint(point) { return this.current?.idle.look?.setPoint(point); }
   getGazeAnchor() {
     const idle = this.current?.idle;
-    return idle?.head ? { position: idle.head.bone.getWorldPosition(new Vector3()), height: idle.height } : null;
+    const head=idle?.head?.bone||this.current?.viewAnchors?.head;
+    return head ? { position: head.getWorldPosition(new Vector3()), height: idle.height } : null;
   }
   getFaceBounds() {
     const anchor = this.getGazeAnchor();
@@ -86,6 +91,11 @@ export class ModelManager {
     if(idle.legs){
       if(preset.single)center.copy(idle.legs.R.anchor);
       else center.copy(idle.legs.L.anchor).add(idle.legs.R.anchor).multiplyScalar(.5);
+    }
+    else if(this.current.viewAnchors?.feet.length){
+      const feet=this.current.viewAnchors.feet;
+      center.copy(feet[preset.single&&feet.length>1?1:0].getWorldPosition(new Vector3()));
+      if(!preset.single&&feet[1])center.add(feet[1].getWorldPosition(new Vector3())).multiplyScalar(.5);
     }
     center.y=bounds.min.y+height*preset.height/2;
     return new Box3().setFromCenterAndSize(center,new Vector3(preset.width,preset.height,preset.depth).multiplyScalar(height));
@@ -129,5 +139,6 @@ export class ModelManager {
     this.current = null;
   }
 
-  dispose() { ++this.requestId; this.download?.abort();this.clear(); }
+  cancelLoad(){++this.requestId;this.download?.abort();}
+  dispose() { this.cancelLoad();this.clear(); }
 }

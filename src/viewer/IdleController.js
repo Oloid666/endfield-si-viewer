@@ -45,6 +45,8 @@ export class IdleController {
     this.nextBlink = config.blinkIntervalMin;
     this.blinkTime = null;
     this.gestureTime = null;
+    this.gameClock = null;
+    this.gameTakeover = false;
     this.reverseChoice = null;
     this.rescueTime = null;
     this.photoLean = 0;
@@ -285,11 +287,13 @@ export class IdleController {
 
   applyLeekDance(seconds,weight) {
     const c=this.config, beat=leekBeat(seconds,c.leekStory), phase=(seconds-c.leekStory.beats.dance)*Math.PI*2/c.action.leekCycle;
+    if(this.gameClock!==null)Object.assign(beat,{dance:1,amplitude:.9,draw:0,show:0,peek:0});
     const swing=Math.sin(phase)*beat.amplitude*beat.dance, bounce=Math.cos(phase*2)*beat.dance;
     this.applyPose(this.spine,.025+.025*bounce,.065*swing,.055*swing);
     this.hips.bone.position.addScaledVector(this.hips.x,.014*this.height*swing*weight).addScaledVector(this.hips.y,-.004*this.height*(1-bounce)*weight);
     this.reachHand('L',c.action.waistHands[0],c.action.elbowPoles[0],weight);
     const hand=[...c.action.leekHand];hand[0]+=c.action.leekSwing*swing*2.1;hand[1]+=.045*bounce;
+    if(this.gameClock!==null)hand[0]+=.04*(this.gameAccent||0);
     hand[0]+=.08*Math.sin(seconds*4)*beat.draw; hand[1]+=.065*Math.cos(seconds*4)*beat.draw;
     hand[2]+=.09*beat.show;
     this.reachHand('R',hand,[-.34,.19,.12],weight);
@@ -410,7 +414,8 @@ export class IdleController {
     let loopWeight = 0;
     const mood = this.gestureTime !== null ? c.gestures[this.gestureKind] : null;
     if (mood) {
-      this.gestureTime += delta;
+      if(this.gameClock!==null){const b=c.leekStory.beats;this.gestureTime=b.dance+this.gameClock%(c.action.leekCycle*8);}
+      else this.gestureTime += delta;
       const t = mood.loop ? (this.gestureTime % mood.duration) / mood.duration : Math.min(1, this.gestureTime / mood.duration);
       loopWeight = mood.loop ? ease(this.gestureTime / c.transitionDuration) : 0;
       envelope = ease(t / 0.14) * ease((1 - t) / 0.18);
@@ -437,6 +442,7 @@ export class IdleController {
     if (mood && this.gestureKind === 'tsundere') this.applyActing(gestureProgress);
     if (mood && this.gestureKind === 'leek') {
       const seconds=this.gestureTime ?? mood.duration, beat=leekBeat(seconds,c.leekStory);
+      if(this.gameClock!==null)Object.assign(beat,{dance:1,amplitude:.9,fade:1,show:0,peek:0});
       loopWeight=beat.fade;
       this.applyLeekDance(seconds,loopWeight);
       if(seconds<c.drawing.takeEnd){
@@ -508,12 +514,13 @@ export class IdleController {
     this.setBlink(MathUtils.lerp(expressionLid, 1, Math.max(blink, gestureBlink)));
     this.blendTransition(delta);
     if(mood && this.gestureKind==='reverse' && this.gestureTime===null){this.reverse.update(mood.duration,0);this.reverse.stop();}
-    this.reverse?.update(this.gestureTime ?? mood?.duration ?? 0, delta);
+    if(!this.gameTakeover)this.reverse?.update(this.gestureTime ?? mood?.duration ?? 0, delta);
     const paintingKind=this.gestureTime!==null?this.gestureKind:'';
     const paintingTime=this.gestureTime||0;
     this.drawing?.update(paintingKind,paintingTime,delta,this.arms.R.end,this.reverse);
     const leekActive=!!mood && this.gestureKind==='leek' && this.gestureTime!==null && this.gestureTime>=c.drawing.revealEnd;
     const leekState=leekBeat(this.gestureTime || 0,c.leekStory);
+    if(this.gameClock!==null)Object.assign(leekState,{dance:1,amplitude:.9,peek:0});
     const tilt=-c.action.leekTilt*Math.sin(((this.gestureTime || 0)-c.leekStory.beats.dance)*Math.PI*2/c.action.leekCycle)*leekState.dance*leekState.amplitude + .3*leekState.peek;
     if(leekActive&&paintingTime<c.drawing.takeEnd)this.leek.alpha=1;
     this.leek?.update(leekActive,delta,c.action.leekFade,tilt);

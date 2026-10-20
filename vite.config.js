@@ -3,22 +3,25 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 
-const modelPath=new URL('./public/models/si.glb',import.meta.url);
-const source=existsSync(modelPath)?readFileSync(modelPath):null;
-const compressed=source?gzipSync(source,{level:9}):null;
-const asset=source?{path:'models/si.glb',gzipPath:'models/si.glb.gz',revision:createHash('sha256').update(source).digest('hex'),bytes:source.length,gzipBytes:compressed.length}:null;
+const entries=['si','zhuang-fangyi'].flatMap(name=>{
+  const file=new URL(`./public/models/${name}.glb`,import.meta.url);
+  if(!existsSync(file))return [];
+  const source=readFileSync(file),compressed=gzipSync(source,{level:9});
+  return [{compressed,asset:{path:`models/${name}.glb`,gzipPath:`models/${name}.glb.gz`,revision:createHash('sha256').update(source).digest('hex'),bytes:source.length,gzipBytes:compressed.length}}];
+});
+const assets=Object.fromEntries(entries.map(({asset})=>[asset.path,asset]));
 
-// Actions supplies /repository/; relative assets also work in a nested preview.
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || './',
-  define: { __DEFAULT_MODEL_ASSET__: JSON.stringify(asset) },
+  define: { __DEFAULT_MODEL_ASSET__:JSON.stringify(assets['models/si.glb']||null), __MODEL_ASSETS__:JSON.stringify(assets) },
   plugins: [{
-    name: 'lossless-model-download',
-    generateBundle(){if(compressed)this.emitFile({type:'asset',fileName:asset.gzipPath,source:compressed});},
+    name:'lossless-model-download',
+    generateBundle(){for(const {compressed,asset} of entries)this.emitFile({type:'asset',fileName:asset.gzipPath,source:compressed});},
     configureServer(server){
       server.middlewares.use((request,response,next)=>{
-        if(!compressed||!request.url.split('?')[0].endsWith('/models/si.glb.gz'))return next();
-        response.setHeader('Content-Type','application/gzip');response.setHeader('Content-Length',compressed.length);response.end(compressed);
+        const entry=entries.find(({asset})=>request.url.split('?')[0].endsWith('/'+asset.gzipPath));
+        if(!entry)return next();
+        response.setHeader('Content-Type','application/gzip');response.setHeader('Content-Length',entry.compressed.length);response.end(entry.compressed);
       });
     },
   }],
