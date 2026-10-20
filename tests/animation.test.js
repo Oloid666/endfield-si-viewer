@@ -265,7 +265,7 @@ test('expression presets blend, clamp strength, widen surprised eyes and return 
   const face=new FaceController(viewerConfig.face);
   assert.equal(face.setExpression('missing',1),false);
   assert.equal(face.setExpression('angry',NaN),false);
-  face.setExpression('angry',2);assert.equal(face.strength,1);
+  face.setExpression('angry',3);assert.equal(face.strength,2);
   const before=face.values.browLeftInner;face.update(.03);
   assert(face.values.browLeftInner<before&&face.values.browLeftInner>face.target.browLeftInner);
   face.setExpression('surprised',.8);face.update(2);assert(face.values.lid<0);
@@ -312,4 +312,47 @@ test('camera gaze follows the viewer and action head motion keeps priority', () 
   const neutral=fixture();idle.playGesture(viewer,'tsundere');neutral.playGesture(viewer,'tsundere');
   idle.update(2,origin.clone().add(new Vector3(2,0,2)));neutral.update(2);
   close([idle.head.bone.quaternion.toArray()],[neutral.head.bone.quaternion.toArray()]);
+});
+
+
+test('200% blends to authored exaggerated endpoints, not doubled face offsets', () => {
+  const face=new FaceController(viewerConfig.face);
+  for(const preset of ['angry','proud','shy','surprised']){
+    face.setExpression(preset,1);face.update(4);
+    assert(Math.abs(face.values.headRoll)<1e-8);
+    const ordinary={...face.values};
+    face.setExpression(preset,2);face.update(4);
+    const endpoint=viewerConfig.face.exaggerated[preset];
+    for(const [key,value] of Object.entries(endpoint))assert(Math.abs(face.values[key]-value)<1e-8);
+    assert(Math.abs(face.values.headRoll)>.05);
+    assert(['browLeftInner','browLeftOuter','mouthLeft','mouthRight','lid'].some(key=>Math.abs(face.values[key]-ordinary[key]*2)>1e-5));
+    face.setExpression(preset,1.5);face.update(4);
+    assert(Math.abs(face.values.headRoll-endpoint.headRoll*.5)<1e-8);
+  }
+  face.setExpression('neutral',2);face.update(4);assert(Object.values(face.values).every(v=>Math.abs(v)<1e-8));
+});
+
+test('200% face adds head acting and an enlarged stomp while feet and grip remain grounded', () => {
+  const results=[];
+  for(const strength of [1,2]){
+    const idle=fixture();idle.expression.setExpression('shy',strength);idle.update(4);
+    const selectedHead=idle.head.bone.quaternion.toArray();
+    const wristBase=idle.arms.R.end.getWorldPosition(new Vector3());
+    idle.playGesture(viewer,'tsundere');idle.update(viewerConfig.idle.gestures.tsundere.duration*.29);
+    const right=idle.legs.R.solver.end.getWorldPosition(new Vector3());
+    const left=idle.legs.L.solver.end.getWorldPosition(new Vector3());
+    assert(left.distanceTo(idle.legs.L.anchor)<1e-5);
+    const hips=idle.hips.bone.getWorldPosition(new Vector3());
+    for(const [index,side] of ['L','R'].entries()){
+      const target=hips.clone().add(new Vector3(...viewerConfig.idle.action.waistHands[index]).multiplyScalar(idle.height));
+      assert(idle.arms[side].end.getWorldPosition(new Vector3()).distanceTo(target)<1e-5);
+    }
+    const lift=(right.y-idle.legs.R.anchor.y)/idle.height;
+    results.push(lift);
+    assert(lift>.08);
+    idle.stopGesture();idle.update(4);
+    close([idle.head.bone.quaternion.toArray()],[selectedHead]);
+    assert(idle.arms.R.end.getWorldPosition(new Vector3()).distanceTo(wristBase)<1e-5);
+  }
+  assert(results[1]-results[0]>.03);
 });

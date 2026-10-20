@@ -15,6 +15,7 @@ const faceControls = document.querySelector('#face-controls');
 const expressionButtons = [...document.querySelectorAll('[data-expression]')];
 const strengthInput = document.querySelector('#expression-strength');
 const gazeSelect = document.querySelector('#gaze-mode');
+strengthInput.max = String(viewerConfig.face.maxStrength*100);
 const faceHint = document.querySelector('#face-hint');
 let expressionSelection = 'neutral';
 let gazePointer;
@@ -22,6 +23,7 @@ let gazePointer;
 function applyExpression() {
   models?.setExpression(expressionSelection, Number(strengthInput.value)/100);
   document.querySelector('#expression-value').value = `${strengthInput.value}%`;
+  document.querySelector('#expression-value').classList.toggle('exaggerated', Number(strengthInput.value)>100);
   for (const button of expressionButtons) button.setAttribute('aria-pressed', String(button.dataset.expression === expressionSelection));
 }
 
