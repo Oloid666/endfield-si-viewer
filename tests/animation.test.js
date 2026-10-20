@@ -409,3 +409,35 @@ test('small onion opens its eyes only for the punchline, then hides them on repl
   idle.stopGesture();idle.update(1);assert.equal(idle.leek.face.visible,false);
   idle.playGesture(viewer,'leek');idle.update(.7);assert.equal(idle.leek.face.visible,false);idle.dispose();
 });
+
+test('onion variants keep three crown tufts, a bent stem and a face attached to the stem', () => {
+  const idle=fixture(),held=idle.leek,giant=idle.reverse.leek;
+  assert.equal(held.variant,'held');assert.equal(giant.variant,'giant');
+  assert(giant.design.radius>held.design.radius);
+  assert.equal(held.geometries[1].getAttribute('position').count,66,'three 22-vertex tufts in a single mesh');
+  assert(held.stemBend(.9)>held.stemBend(.3));
+  const positions=giant.faceGeometry.getAttribute('position');
+  for(let i=0;i<positions.count;i++){
+    const t=positions.getY(i)/giant.config.stemLength+.15;
+    const dx=positions.getX(i)-giant.stemBend(t),z=positions.getZ(i);
+    assert(Math.abs(Math.hypot(dx,z)-giant.stemRadius(t)-.00035)<1e-7,'face follows stem surface');
+  }
+  assert.equal(idle.reverse.facePaper,undefined,'no floating face mask');
+  giant.setFace('serious');held.setFace('peek');
+  const atlasUV=giant.faceGeometry.getAttribute('uv');
+  assert(atlasUV.getX(0)>=.25&&atlasUV.getX(16)<=.5,'each prop changes its own atlas UVs');
+  held.setFace('dead');assert.equal(giant.expression,'serious');idle.dispose();
+});
+
+test('chorus uses three fixed dancers, a late beat, shared maps, and clears completely after stop', () => {
+  const idle=fixture(),chorus=idle.chorus;
+  assert.equal(chorus.entries.length,3);
+  for(const {prop} of chorus.entries){assert.equal(prop.variant,'dancer');assert.equal(prop.assets,idle.leek.assets);}
+  idle.playGesture(viewer,'leek');idle.update(4.2);
+  assert(chorus.entries.every(({prop})=>prop.group.visible));
+  assert(Math.abs(chorus.entries[0].prop.tilt-chorus.entries[2].prop.tilt)>.01,'last dancer lags the beat');
+  idle.update(2.6);assert.equal(idle.leek.expression,'peek');
+  idle.update(.7);assert.equal(idle.leek.expression,'dead');
+  idle.stopGesture();idle.update(1);assert(chorus.entries.every(({prop})=>!prop.group.visible));
+  const hosts=chorus.entries.map(({host})=>host);idle.dispose();assert(hosts.every(host=>host.parent===null));
+});

@@ -169,3 +169,9 @@ Build 唯一提示是主要 JS chunk 約 597 kB（gzip 約 153 kB），包含 Th
 - `npm test`: 23 passing tests, including one-shot completion for all three actions, full wrist attachment during both grabs, grounded fake ending, cancellation at six story phases, actor transform restoration, prop-eye reveal/replay, and disposal of shared ink resources.
 - Chromium 390×844, real decoded/skinned GLB: sampled all story beats; checked projected head/feet framing, mobile stop and landscape completion. First visual pass reached at most 34 draw calls; repeated three-action replays retained the same GPU geometry/texture counts. These are software-renderer structural measurements, not an iPhone FPS claim.
 - Actual iPhone Safari performance and visual checks remain pending.
+
+## Onion character design
+
+- `npm test`: 25 passing tests. New checks cover the three-tuft merged crown, bent stem, surface-conforming face geometry, independent expression UV selection, three shared-map dancers, delayed beat, playing dead and clean cancellation/disposal.
+- Repository-subpath production build passes. Chromium real-GLB mobile/landscape checks cover story framing, repeat-play resource stability and full GPU geometry/texture disposal after model clearing.
+- Physical iPhone Safari and hardware FPS remain untested.

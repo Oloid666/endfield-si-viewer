@@ -3,6 +3,7 @@ import { LimbSolver } from './LimbSolver.js';
 import { LeekProp } from './LeekProp.js';
 import { FaceController } from './FaceController.js';
 import { GazeController } from './GazeController.js';
+import { LeekChorus } from './LeekChorus.js';
 import { InkStage } from './InkStage.js';
 import { leekBeat, reverseBeat, ramp } from './actionTimeline.js';
 import { ReverseLeekController } from './ReverseLeekController.js';
@@ -117,6 +118,7 @@ export class IdleController {
     }
     if (this.arms) {
       this.reverse = new ReverseLeekController(actor,this.arms.R.end,bounds,this.height,config.reverse,config.prop);
+      this.chorus = new LeekChorus(this.reverse.stage,bounds,this.height,config.chorus,config.prop);
       this.inkStage = new InkStage(this.reverse.stage,bounds,this.height,config.theater,this.leek.textures[0]||null);
     }
     if (this.head && faceConfig && gazeConfig) {
@@ -452,7 +454,12 @@ export class IdleController {
     const leekState=leekBeat(this.gestureTime || 0,c.leekStory);
     const tilt=-c.action.leekTilt*Math.sin(((this.gestureTime || 0)-c.leekStory.beats.dance)*Math.PI*2/c.action.leekCycle)*leekState.dance*leekState.amplitude + .3*leekState.peek;
     this.leek?.update(leekActive,delta,c.action.leekFade,tilt);
-    this.leek?.setFace(leekActive && leekState.peek>.1);
+    const seconds=this.gestureTime || 0;
+    const peekStart=c.leekStory.beats.peek;
+    const expression=leekActive && leekState.peek>.1 ? seconds<peekStart+.55?'peek':'dead' : 'hidden';
+    const lateCowlick=leekActive && seconds>c.leekStory.beats.pose && seconds<peekStart+.4;
+    this.leek?.perform(seconds,expression,leekState.dance || (lateCowlick?1:0));
+    this.chorus?.update(leekActive,seconds,delta,c.action.leekCycle);
     this.arms.R.end.getWorldPosition(this.target);this.legs.R.solver.end.getWorldPosition(this.anchor);
     this.inkStage?.update(this.gestureTime===null?'':this.gestureKind,this.gestureTime || 0,this.target,this.anchor,this.reverse,delta,cameraPosition);
   }
@@ -478,6 +485,7 @@ export class IdleController {
 
   dispose() {
     // Release offsets immediately when replacing the model, without a blend.
+    this.chorus?.dispose();
     this.inkStage?.dispose();
     this.reverse?.dispose();
     this.leek?.dispose();
