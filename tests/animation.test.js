@@ -139,7 +139,7 @@ test('animated feet are skin-weighted deformation bones, not unweighted controls
   for(const count of counts.values())assert(count>100);
 });
 
-test('leek loops, can stop while idle is paused, and disposes its GPU resources', () => {
+test('leek story plays, can stop while idle is paused, and disposes its GPU resources', () => {
   const idle = fixture();
   const base = pose(idle);
   assert(idle.playGesture(viewer,'leek'));
@@ -238,7 +238,7 @@ test('giant onion keeps wrist attached, lands, restores scale and releases resou
   assert(idle.playGesture(viewer,'reverse'));
   for(let j=0;j<120;j++){
     idle.update(1/30);
-    if(j>30){
+    if(j>105){
       const wrist=r.stage.worldToLocal(idle.arms.R.end.getWorldPosition(new Vector3()));
       assert(wrist.distanceTo(r.hand.position)<1e-5);
       assert(Math.abs(r.actor.scale.x-viewerConfig.idle.reverse.characterScale*r.base.scale.x)<1e-6);
@@ -368,4 +368,44 @@ test('three comic expressions retain the old 50% endpoint, reach distinct new en
     face.setExpression(selection, 0); face.update(4);
     assert(Object.values(face.values).every(value=>Math.abs(value)<1e-8));
   }
+});
+
+test('all three short plays finish automatically, restore the actor and release pooled ink resources', () => {
+  for(const kind of ['tsundere','leek','reverse']){
+    const idle=fixture(),r=idle.reverse;
+    const base=pose(idle);idle.playGesture(viewer,kind);
+    const duration=viewerConfig.idle.gestures[kind].duration;
+    for(let i=0;i<Math.ceil((duration+1)*30);i++)idle.update(1/30);
+    assert.equal(idle.gestureTime,null,kind);assert.equal(r.active,false);assert.equal(r.landing,null);
+    assert(r.actor.position.equals(r.base.position));assert(r.actor.scale.equals(r.base.scale));
+    assert.equal(idle.leek.group.visible,false);assert.equal(r.leek.group.visible,false);
+    assert.equal(idle.inkStage.root.visible,false);close(pose(idle),base);
+    let freed=0;
+    for(const resource of [idle.inkStage.material,idle.inkStage.ringMaterial,idle.inkStage.flowerMaterial,idle.inkStage.plane,idle.inkStage.circle,idle.inkStage.ringGeometry])resource.addEventListener('dispose',()=>freed++);
+    idle.dispose();assert.equal(freed,6);assert.equal(idle.inkStage.root.parent,null);
+  }
+});
+
+test('reverse story has a grounded fake ending, second grab, windmill and exact cancellation at every beat', () => {
+  for(const seconds of [1,2.5,4.5,6.95,8.15,10.2]){
+    const idle=fixture();idle.playGesture(viewer,'reverse');
+    for(let t=0;t<seconds-1e-8;t+=.05)idle.update(Math.min(.05,seconds-t));
+    const r=idle.reverse;
+    assert.equal(r.segments.length,8,'four two-segment ink limbs');
+    if(seconds===6.95){assert(r.actor.position.distanceTo(r.base.position)<1e-8);assert(r.actor.scale.distanceTo(r.base.scale)<1e-8);}
+    if(seconds===4.5||seconds===8.15){
+      const wrist=r.stage.worldToLocal(idle.arms.R.end.getWorldPosition(new Vector3()));
+      assert(wrist.distanceTo(r.hand.position)<1e-5);assert(r.beat.attached>.99);
+    }
+    idle.stopGesture();idle.update(1);
+    assert(r.actor.position.equals(r.base.position));assert(r.actor.scale.equals(r.base.scale));assert.equal(r.visible,false);
+    idle.dispose();
+  }
+});
+
+test('small onion opens its eyes only for the punchline, then hides them on replay', () => {
+  const idle=fixture();idle.playGesture(viewer,'leek');idle.update(4);
+  assert.equal(idle.leek.face.visible,false);idle.update(3);assert.equal(idle.leek.face.visible,true);
+  idle.stopGesture();idle.update(1);assert.equal(idle.leek.face.visible,false);
+  idle.playGesture(viewer,'leek');idle.update(.7);assert.equal(idle.leek.face.visible,false);idle.dispose();
 });

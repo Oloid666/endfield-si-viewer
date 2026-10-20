@@ -163,3 +163,9 @@ Build 唯一提示是主要 JS chunk 約 597 kB（gzip 約 153 kB），包含 Th
 - Repository-subpath production build: `VITE_BASE_PATH=/endfield-si-viewer/ npm run build` passed.
 - Chromium mobile viewport 390×844 (SwiftShader): three expressions × 0/50/100/150/200 intensity, independent drawer sections, action suppression, collapsed quick-stop, landscape 844×390, no uncaught JavaScript errors. Browser harness is an external Playwright verification script; Playwright is not a product dependency.
 - Physical iPhone Safari, GPU performance, and VoiceOver remain untested.
+
+## Three ink comedy shorts
+
+- `npm test`: 23 passing tests, including one-shot completion for all three actions, full wrist attachment during both grabs, grounded fake ending, cancellation at six story phases, actor transform restoration, prop-eye reveal/replay, and disposal of shared ink resources.
+- Chromium 390×844, real decoded/skinned GLB: sampled all story beats; checked projected head/feet framing, mobile stop and landscape completion. First visual pass reached at most 34 draw calls; repeated three-action replays retained the same GPU geometry/texture counts. These are software-renderer structural measurements, not an iPhone FPS claim.
+- Actual iPhone Safari performance and visual checks remain pending.

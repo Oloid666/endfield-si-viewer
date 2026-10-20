@@ -67,3 +67,18 @@ button:focus-visible, .button:has(+ input:focus-visible) { outline: 2px solid #c
 @media (prefers-reduced-motion: reduce) { .comic-mark { will-change: auto; } }
 
 .panel[data-expanded="false"] #status[data-loading="true"] { display: block; max-width: 240px; padding: 8px; background: #1b1d20ed; border-radius: 7px; white-space: normal; }
+
+#viewport { isolation: isolate; z-index: 0; }
+#viewport > canvas { position: relative; z-index: 1; }
+.comic-effects { z-index: 2; }
+header { z-index: 2; }
+.panel, #quick-stop { z-index: 4; }
+.ink-paper { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 35% 20%, #f1eddc, #d2d1b9); }
+.ink-paper::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(94deg, #263d2802 0 1px, transparent 1px 5px); }
+.ink-paper svg { width: 100%; height: 100%; transform-origin: 50% 100%; }
+.ink-caption { position: absolute; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 3; pointer-events: none; width: max-content; max-width: calc(100% - 32px); padding: 8px 14px; color: #e5e9cf; background: #1b251fe0; border-left: 3px solid #b5c99a; font: 600 17px/1.5 'Songti TC', 'Noto Serif TC', serif; text-align: center; }
+.ink-caption.is-paper { color: #283c2d; background: #e9e5d6d9; border-left-color: #52664a; }
+.ink-caption b { display: inline-block; margin-left: 10px; border: 2px solid #a13f32; color: #a13f32; padding: 0 3px; transform: rotate(-9deg); font-size: 22px; }
+.ink-question { position: absolute; top: 28%; left: 22%; z-index: 3; font: 700 40px serif; color: #263b2b; pointer-events: none; }
+
+#app[data-ink-paper="true"] header, #app[data-ink-paper="true"] header p, #app[data-ink-paper="true"] h1 span { color: #314832; }

@@ -7,7 +7,7 @@ export class SceneManager {
     this.scene = new Scene();
     this.scene.background = new Color(config.background);
     this.camera = new PerspectiveCamera(config.camera.fov, 1, config.camera.near, config.camera.far);
-    this.renderer = new WebGLRenderer({ antialias: config.renderer.antialias, alpha: false });
+    this.renderer = new WebGLRenderer({ antialias: config.renderer.antialias, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, config.renderer.maxPixelRatio));
     container.append(this.renderer.domElement);
     this.contextLost = (event) => { event.preventDefault(); this.stop(); onContextLost(); };
