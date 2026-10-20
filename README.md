@@ -31,7 +31,7 @@ npm run preview
 
 - 預設將合法模型放在 `public/models/si.glb`，重新啟動／重新建置即可。
 - 缺少模型時仍會顯示介面、錯誤訊息及「上傳本機 GLB」。選檔只在當前頁面記憶體使用，不會上傳或永久儲存；重新整理後恢復預設模型。
-- 建議 GLB 內嵌貼圖。一般 GLTF 與外部貼圖可部署到 `public/models/`，再修改 `src/config/viewerConfig.js` 的 `modelPath`，保留 `.bin` 與貼圖的相對路徑；本機選檔目前只接受 GLB。
+- 建議 GLB 內嵌貼圖。一般 GLTF 與外部貼圖可部署到 `public/models/`，再修改 `src/config/characters.js` 中對應角色的 `path`，保留 `.bin` 與貼圖的相對路徑；本機選檔目前只接受 GLB。
 - 不附 Draco、Meshopt、KTX2 解碼器。遇到這些壓縮格式需先合法轉出一般 GLB，或後續按需要加入解碼器。
 - 模型比例、材質、貼圖與骨架保持匯入狀態；只平移外層容器，不自動旋轉模型的朝向。若模型朝向不同，可自行旋轉觀看。
 - 手機載入能力仍取決於模型大小、三角形數與貼圖解析度；建議先使用低負載版本，再於真機量測。
@@ -59,6 +59,11 @@ src/
   main.js
   config/viewerConfig.js
   config/interactionConfig.js
+  config/characters.js
+  config/gameConfig.js
+  game/RhythmEngine.js
+  game/RhythmGame.js
+  game/GameStage.js
   viewer/SceneManager.js
   viewer/ModelManager.js
   viewer/ModelTransfer.js
