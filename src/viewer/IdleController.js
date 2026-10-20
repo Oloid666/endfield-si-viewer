@@ -3,6 +3,8 @@ import { LimbSolver } from './LimbSolver.js';
 import { LeekProp } from './LeekProp.js';
 import { FaceController } from './FaceController.js';
 import { GazeController } from './GazeController.js';
+import { InkStage } from './InkStage.js';
+import { leekBeat, reverseBeat, ramp } from './actionTimeline.js';
 import { ReverseLeekController } from './ReverseLeekController.js';
 
 const ease = (value) => MathUtils.smoothstep(value, 0, 1);
@@ -113,7 +115,10 @@ export class IdleController {
         });
       }
     }
-    if (this.arms) this.reverse = new ReverseLeekController(actor, this.arms.R.end, bounds, this.height, config.reverse, config.prop);
+    if (this.arms) {
+      this.reverse = new ReverseLeekController(actor,this.arms.R.end,bounds,this.height,config.reverse,config.prop);
+      this.inkStage = new InkStage(this.reverse.stage,bounds,this.height,config.theater,this.leek.textures[0]||null);
+    }
     if (this.head && faceConfig && gazeConfig) {
       this.expression = new FaceController(faceConfig);
       this.look = new GazeController(this.head.bone, gazeConfig);
@@ -252,12 +257,14 @@ export class IdleController {
   }
 
   applyLeekDance(seconds,weight) {
-    const c=this.config, phase=seconds*Math.PI*2/c.action.leekCycle;
-    const swing=Math.sin(phase), bounce=Math.cos(phase*2);
+    const c=this.config, beat=leekBeat(seconds,c.leekStory), phase=(seconds-c.leekStory.beats.dance)*Math.PI*2/c.action.leekCycle;
+    const swing=Math.sin(phase)*beat.amplitude*beat.dance, bounce=Math.cos(phase*2)*beat.dance;
     this.applyPose(this.spine,.025+.025*bounce,.065*swing,.055*swing);
     this.hips.bone.position.addScaledVector(this.hips.x,.014*this.height*swing*weight).addScaledVector(this.hips.y,-.004*this.height*(1-bounce)*weight);
     this.reachHand('L',c.action.waistHands[0],c.action.elbowPoles[0],weight);
-    const hand=[...c.action.leekHand];hand[0]+=c.action.leekSwing*swing;hand[1]+=.018*bounce;
+    const hand=[...c.action.leekHand];hand[0]+=c.action.leekSwing*swing*2.1;hand[1]+=.045*bounce;
+    hand[0]+=.08*Math.sin(seconds*4)*beat.draw; hand[1]+=.065*Math.cos(seconds*4)*beat.draw;
+    hand[2]+=.09*beat.show;
     this.reachHand('R',hand,[-.34,.19,.12],weight);
     const wrist=this.body.find(part=>part.name==='wristR').pose;
     // Wrist-local offsets follow the moving arm instead of moving the prop alone.
@@ -290,18 +297,18 @@ export class IdleController {
   }
 
   applyFace(mood, amount, progress = 0, userWeight = 1) {
-    const acting = mood && !mood.loop;
+    const acting = mood && this.gestureKind==='tsundere';
     for (const item of this.face) {
       let offset = 0;
       if (item.role === 'brow') {
         const shape = mood?.face[`brow${item.side}`] || REST_ROTATION;
         offset = acting ? sampleTrack(mood.frames,progress,`brow${item.side}`) * amount * (1 - item.fraction*.25)
-          : mood?.loop ? .0007*amount*(item.side==='Left'?1:.6) : MathUtils.lerp(shape[0], shape[1], item.fraction) * amount;
+          : mood && !acting ? .0007*amount*(item.side==='Left'?1:.6) : MathUtils.lerp(shape[0], shape[1], item.fraction) * amount;
         if (this.playing) offset += Math.max(0, Math.sin(this.time * 0.6)) * this.config.idleBrowLift * (1 - amount);
-      } else if (item.role === 'mouth') offset = acting ? sampleTrack(mood.frames,progress,`mouth${item.side}`)*amount : mood?.loop ? .00085*amount : 0;
-      else offset = acting ? sampleTrack(mood.frames,progress,'cheek')*amount : mood?.loop ? .0004*amount : 0;
+      } else if (item.role === 'mouth') offset = acting ? sampleTrack(mood.frames,progress,`mouth${item.side}`)*amount : mood && !acting ? .00085*amount : 0;
+      else offset = acting ? sampleTrack(mood.frames,progress,'cheek')*amount : mood && !acting ? .0004*amount : 0;
       if (mood && this.gestureKind==='reverse') {
-        const surprised=this.gestureTime<this.config.reverse.cycle*1.5;
+        const surprised=this.gestureTime<this.config.reverse.beats.rest;
         offset=(item.role==='brow'?(surprised?.0014:-.0013):item.role==='mouth'?-.0007:.0003)*amount;
       }
       if(item.role==='mouth') offset *= 1-item.fraction;
@@ -387,27 +394,31 @@ export class IdleController {
     }
     this.applyBody(mood, gestureProgress);
     for(const finger of this.fingers)finger.bone.quaternion.copy(finger.rest);
-    if (mood && !mood.loop) this.applyActing(gestureProgress);
-    if (mood?.loop && this.gestureKind === 'leek') {
-      this.applyLeekDance(this.gestureTime, loopWeight);
-      const phase = this.gestureTime * Math.PI * 2 / c.action.leekCycle;
-      envelope = loopWeight;
-      pitch = .035 + .055 * Math.cos(phase*2); yaw = .09 * Math.sin(phase*.5); roll = .09 * Math.sin(phase);
-      eyeYaw = -.09 * Math.sin(phase); faceAmount = .8 * loopWeight;
-      const blinkPhase = (this.gestureTime % (c.action.leekCycle*3)) / c.blinkDuration;
-      gestureBlink = blinkPhase < 1 ? Math.sin(Math.PI*blinkPhase)**2 : 0;
+    if (mood && this.gestureKind === 'tsundere') this.applyActing(gestureProgress);
+    if (mood && this.gestureKind === 'leek') {
+      const seconds=this.gestureTime ?? mood.duration, beat=leekBeat(seconds,c.leekStory);
+      loopWeight=beat.fade;
+      this.applyLeekDance(seconds,loopWeight);
+      const phase=(seconds-c.leekStory.beats.dance)*Math.PI*2/c.action.leekCycle;
+      envelope=loopWeight; faceAmount=.9*loopWeight;
+      pitch=-.06*beat.show+.04*beat.dance*Math.cos(phase*2);
+      yaw=.1*Math.sin(phase*.5)*beat.dance-.45*beat.peek;
+      roll=.12*Math.sin(phase)*beat.dance+.1*beat.show;
+      eyeYaw=-.15*beat.peek;gestureBlink=.3*beat.show;
     }
     if (mood && this.gestureKind === 'reverse') {
-      const phase = this.gestureTime*Math.PI*2/c.reverse.cycle;
-      envelope = loopWeight; faceAmount=loopWeight;
-      this.applyPose(this.body.find(p=>p.name==='armR').pose,0,0,-2.05*loopWeight);
-      this.applyPose(this.body.find(p=>p.name==='elbowR').pose,-.12*loopWeight,.1*loopWeight,0);
-      this.applyPose(this.body.find(p=>p.name==='armL').pose,-.3,.1,.55+.3*Math.sin(phase+1));
-      this.applyPose(this.body.find(p=>p.name==='thighL').pose,.15*Math.sin(phase),0,0);
-      this.applyPose(this.body.find(p=>p.name==='kneeL').pose,.3+.18*Math.sin(phase+1),0,0);
-      this.applyPose(this.body.find(p=>p.name==='kneeR').pose,.4+.2*Math.sin(phase),0,0);
-      pitch=-.06+.06*Math.sin(phase);yaw=.15*Math.sin(phase);roll=-.1*Math.sin(phase);
-      eyeYaw=-.1*Math.sin(phase);gestureBlink=0;
+      const seconds=this.gestureTime ?? mood.duration, beat=reverseBeat(seconds,c.reverse);
+      const phase=(seconds-c.reverse.beats.swing)*Math.PI*2/c.reverse.cycle;
+      loopWeight=ramp(seconds,0,.5)*(1-ramp(seconds,c.reverse.beats.fade,mood.duration));
+      envelope=loopWeight;faceAmount=loopWeight;
+      this.applyPose(this.body.find(p=>p.name==='armR').pose,0,0,-1.65*beat.attached);
+      this.applyPose(this.body.find(p=>p.name==='elbowR').pose,-.12*beat.attached,.1*beat.attached,0);
+      this.applyPose(this.body.find(p=>p.name==='armL').pose,-.3*beat.attached,.1*beat.attached,(.6+.35*Math.sin(phase))*beat.attached);
+      this.applyPose(this.body.find(p=>p.name==='thighL').pose,.3*Math.sin(phase)*beat.attached,0,0);
+      this.applyPose(this.body.find(p=>p.name==='kneeL').pose,(.4+.25*Math.sin(phase+1))*beat.attached,0,0);
+      this.applyPose(this.body.find(p=>p.name==='kneeR').pose,(.4+.3*Math.sin(phase))*beat.attached,0,0);
+      pitch=-.08*beat.attached; yaw=-.45*(1-beat.attached)*beat.limbs;roll=-.17*Math.sin(phase)*beat.attached;
+      eyeYaw=-.15*(1-beat.attached);gestureBlink=0;
     }
     this.applyFace(mood, faceAmount, gestureProgress, 1-envelope);
     const useTracking = this.look && this.look.mode !== 'idle';
@@ -435,8 +446,15 @@ export class IdleController {
     const expressionLid = (this.expression?.values.lid || 0) * (1-envelope);
     this.setBlink(MathUtils.lerp(expressionLid, 1, Math.max(blink, gestureBlink)));
     this.blendTransition(delta);
-    this.reverse?.update(this.gestureTime || 0, delta);
-    this.leek?.update(!!mood?.loop && this.gestureKind === 'leek', delta, c.action.leekFade, this.gestureTime === null ? 0 : -c.action.leekTilt*Math.sin(this.gestureTime*Math.PI*2/c.action.leekCycle));
+    if(mood && this.gestureKind==='reverse' && this.gestureTime===null){this.reverse.update(mood.duration,0);this.reverse.stop();}
+    this.reverse?.update(this.gestureTime ?? mood?.duration ?? 0, delta);
+    const leekActive=!!mood && this.gestureKind==='leek' && this.gestureTime!==null;
+    const leekState=leekBeat(this.gestureTime || 0,c.leekStory);
+    const tilt=-c.action.leekTilt*Math.sin(((this.gestureTime || 0)-c.leekStory.beats.dance)*Math.PI*2/c.action.leekCycle)*leekState.dance*leekState.amplitude + .3*leekState.peek;
+    this.leek?.update(leekActive,delta,c.action.leekFade,tilt);
+    this.leek?.setFace(leekActive && leekState.peek>.1);
+    this.arms.R.end.getWorldPosition(this.target);this.legs.R.solver.end.getWorldPosition(this.anchor);
+    this.inkStage?.update(this.gestureTime===null?'':this.gestureKind,this.gestureTime || 0,this.target,this.anchor,this.reverse,delta,cameraPosition);
   }
 
   stopGesture() {
@@ -460,6 +478,7 @@ export class IdleController {
 
   dispose() {
     // Release offsets immediately when replacing the model, without a blend.
+    this.inkStage?.dispose();
     this.reverse?.dispose();
     this.leek?.dispose();
     for(const finger of this.fingers)finger.bone.quaternion.copy(finger.rest);

@@ -63,7 +63,7 @@ export class ModelManager {
     if (!this.current) return null;
     const {bounds}=this.current;
     const height=bounds.max.y-bounds.min.y;
-    const center=bounds.getCenter(new Vector3());center.y=bounds.min.y+height*.58;
+    const center=bounds.getCenter(new Vector3());center.y=bounds.min.y+height*.64;center.x-=height*.1;
     const c=this.config.camera.reverse;
     return new Box3().setFromCenterAndSize(center,new Vector3(c.width,c.height,c.depth).multiplyScalar(height));
   }

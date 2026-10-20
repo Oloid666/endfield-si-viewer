@@ -1,6 +1,6 @@
 import {
   BufferGeometry, CanvasTexture, CylinderGeometry, DoubleSide, Float32BufferAttribute,
-  Group, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, SRGBColorSpace, Vector3,
+  Group, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, SRGBColorSpace, SphereGeometry, Vector3,
 } from 'three';
 
 // Original, low-poly ink-painted prop. All geometry/textures are local resources;
@@ -39,6 +39,16 @@ export class LeekProp {
       const material=new MeshBasicMaterial({color:leaf%2?0x749a70:0x456c53,map:texture,side:DoubleSide,transparent:true,forceSinglePass:true,alphaTest:.08,depthWrite:false});
       this.add(geometry,material);
     }
+    this.face = new Group(); this.face.visible = false; this.group.add(this.face);
+    const faceGeometry = new SphereGeometry(1, 6, 4);
+    const faceMaterial = new MeshBasicMaterial({color:0x202a21, transparent:true});
+    this.geometries.push(faceGeometry); this.materials.push(faceMaterial);
+    for (let i=0;i<3;i++) {
+      const mark = new Mesh(faceGeometry,faceMaterial);
+      mark.position.set(i===2?0:(i?1:-1)*.0032,config.stemLength*.4-(i===2?.006:0),config.stemRadius+.001);
+      mark.scale.set(i===2?.003:.0014,i===2?.0008:.0021,.0007);
+      this.face.add(mark);
+    }
     this.points=Array.from({length:config.trailSamples},()=>new Vector3());
     this.trailGeometry=new BufferGeometry();
     this.trailGeometry.setAttribute('position',new Float32BufferAttribute(new Float32Array((config.trailSamples-1)*18),3));
@@ -58,6 +68,8 @@ export class LeekProp {
     for(let j=0;j<46;j++){const x=(j*37)%128,y=(j*53)%256;ctx.clearRect(x,y,1+(j%3),12+(j%31));ctx.fillStyle='rgba(25,45,34,.16)';ctx.fillRect(x+3,y,1,20+j%43)}
     const texture=new CanvasTexture(canvas);texture.colorSpace=SRGBColorSpace;this.textures.push(texture);return texture;
   }
+
+  setFace(visible) { this.face.visible = visible; }
 
   update(active,delta,fadeDuration,tilt=0) {
     if(this.disposed)return;

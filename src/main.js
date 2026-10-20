@@ -1,4 +1,5 @@
 import './styles/main.css';
+import { InkTheater } from './ui/InkTheater.js';
 import { ComicEffects } from './ui/ComicEffects.js';
 import { GazePointer } from './ui/GazePointer.js';
 import { loadingStatus } from './ui/loadingStatus.js';
@@ -20,6 +21,8 @@ strengthInput.max = String(viewerConfig.face.maxStrength*100);
 const faceHint = document.querySelector('#face-hint');
 let expressionSelection = 'neutral';
 let comics;
+let theater;
+let background;
 let cameraMode = 'full';
 const quickStop = document.querySelector('#quick-stop');
 strengthInput.value = String(viewerConfig.face.defaultStrength*100);
@@ -64,8 +67,8 @@ function syncGestureButtons() {
   if (state === previousGestureState) return;
   previousGestureState = state;
   for (const button of gestureButtons) {
-    button.disabled = !idle?.head || (!!active && !(['leek','reverse'].includes(active) && button.dataset.gesture === active));
-    button.textContent = ['leek','reverse'].includes(active) && button.dataset.gesture === active ? (active==='leek'?'停止甩蔥':'停止蔥甩蔥') : gestureLabels.get(button) + (active === button.dataset.gesture ? '…' : '');
+    button.disabled = !idle?.head || (!!active && active !== button.dataset.gesture);
+    button.textContent = active === button.dataset.gesture ? `■ 停止${gestureLabels.get(button)}` : gestureLabels.get(button);
     button.setAttribute('aria-pressed', String(active === button.dataset.gesture));
     button.setAttribute('aria-label', button.textContent);
     button.setAttribute('aria-busy', String(active === button.dataset.gesture));
@@ -141,6 +144,8 @@ try {
     for (const button of gestureButtons) button.disabled = true;
   });
   document.querySelector('#status').dataset.loading = 'true';
+  theater = new InkTheater(document.querySelector('#viewport'),document.querySelector('#app'),viewerConfig.idle.theater);
+  background = scene.scene.background;
   comics = new ComicEffects(document.querySelector('#viewport'), viewerConfig.face.comic);
   camera = new CameraController(scene.camera, scene.renderer.domElement, viewerConfig);
   models = new ModelManager(scene.scene, viewerConfig);
@@ -175,6 +180,7 @@ try {
   resize();
   scene.start((delta) => { camera.update(delta); models.update(delta, scene.camera.position); syncGestureButtons(); syncShoeButton();
     const idle = models.current?.idle;
+    scene.scene.background = theater.update(idle,delta) ? null : background;
     comics.update(delta, scene.camera, models.getGazeAnchor(), idle?.expression, idle?.gestureTime != null || idle?.reverse?.landing);
   });
   idleButton.addEventListener('click', () => {
@@ -194,7 +200,7 @@ try {
     syncShoeButton();
   });
   for (const button of gestureButtons) button.addEventListener('click', () => {
-    if (['leek','reverse'].includes(button.dataset.gesture) && models.current?.idle.gestureKind === button.dataset.gesture && models.current.idle.gestureTime !== null) models.stopGesture();
+    if (models.current?.idle.gestureKind === button.dataset.gesture && models.current.idle.gestureTime !== null) models.stopGesture();
     else if (models.playGesture(scene.camera.position, button.dataset.gesture)) {
       cameraMode = 'action';
       if (button.dataset.gesture==='reverse') camera.showStage(models.getReverseBounds(), true);
@@ -226,6 +232,7 @@ window.addEventListener('pagehide', (event) => {
   observer?.disconnect();
   gazePointer?.dispose();
   comics?.dispose();
+  theater?.dispose();
   camera?.dispose();
   models?.dispose();
   scene?.dispose();
