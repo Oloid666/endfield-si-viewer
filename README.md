@@ -42,6 +42,9 @@ src/
   viewer/ModelManager.js
   viewer/CameraController.js
   viewer/IdleController.js
+  viewer/FaceController.js
+  viewer/GazeController.js
+  ui/GazePointer.js
   viewer/LimbSolver.js
   viewer/LeekProp.js
   viewer/ReverseLeekController.js
@@ -108,3 +111,19 @@ VITE_BASE_PATH=/endfield-si-viewer/ npm run preview
 「4 · 蔥甩蔥」會讓擬人化大蔥伸出水墨手臂，抓著縮小的祀左右甩動。鏡頭自動切到較寬的舞台範圍，仍可手動旋轉和縮放。再按一次或暫停待機後，祀平滑落地、恢復原尺寸，道具消失並回到全身取景；更換模型亦會完整清除。這是原創搞怪程序動畫，沒有使用布娃娃物理。預覽見 [影片](docs/previews/si-reverse-leek.mp4)。
 
 下載百分比限制在合法範圍；傳輸達到伺服器回報的大小時改顯示「處理模型與貼圖」，等模型實際準備好後才顯示載入完成。總大小不明時不顯示百分比。模型署名保留於操作區中的「模型來源與授權」，預設收起，點開可查看作者、來源及 CC BY 4.0。
+
+
+### 表情面板與眼神追蹤
+
+展開操作 →「表情與眼神」可選自然、生氣、得意、害羞、驚訝，並用 0–100% 滑桿調整強度。表情平滑切換，眉毛左右不對稱；驚訝會略微睜大眼睛。動作播放時優先使用動作表情，結束後回到所選表情；設定也能在待機暫停時操作。沒有新增 morph target 或改寫 GLB。
+
+眼神模式：
+
+- **看鏡頭**（預設）：跟隨目前 3D 鏡頭位置，眼睛先轉、頭部稍後跟上，角度有上限。
+- **看點擊位置**：輕點 3D 畫面選擇注視目標；點擊投射到人物前方的空間平面，不需要點到模型表面。拖曳、長按和雙指操作不會選取目標，仍交給 OrbitControls。
+- **自然待機**：恢復原本有停頓的自動視線。
+- **不追蹤**：平滑回到正視，保留表情及既有眨眼。
+
+「臉部近看」可拉近檢查表情；「重設視角」回到全身。面板預設收起，展開後可在面板內捲動。更換模型會清除注視位置；不支援骨架的模型停用表情與眼神設定。
+
+`FaceController` 只管理使用者表情偏移，`GazeController` 管理空間目標與眼睛／頭部角度，`GazePointer` 管理點擊與觸控辨識；由原有 IdleController 統一寫入骨骼並決定動作優先順序。設定集中在 viewerConfig.face、viewerConfig.gaze、viewerConfig.camera.face，仍只有一個渲染循環。

@@ -1,6 +1,8 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
 import { LimbSolver } from './LimbSolver.js';
 import { LeekProp } from './LeekProp.js';
+import { FaceController } from './FaceController.js';
+import { GazeController } from './GazeController.js';
 import { ReverseLeekController } from './ReverseLeekController.js';
 
 const ease = (value) => MathUtils.smoothstep(value, 0, 1);
@@ -30,7 +32,7 @@ function sampleTrack(points, time, key = 1) {
 
 // Runtime pose offsets only: never edit the GLB or rebuild its skeleton.
 export class IdleController {
-  constructor(gltf, config, bounds, actor = gltf.scene) {
+  constructor(gltf, config, bounds, actor = gltf.scene, faceConfig = null, gazeConfig = null) {
     this.config = config;
     this.time = 0;
     this.awaySign = 1;
@@ -112,6 +114,10 @@ export class IdleController {
       }
     }
     if (this.arms) this.reverse = new ReverseLeekController(actor, this.arms.R.end, bounds, this.height, config.reverse, config.prop);
+    if (this.head && faceConfig && gazeConfig) {
+      this.expression = new FaceController(faceConfig);
+      this.look = new GazeController(this.head.bone, gazeConfig);
+    }
     this.offset = new Quaternion();
     this.axisOffset = new Quaternion();
     this.lookDirection = new Vector3();
@@ -273,7 +279,7 @@ export class IdleController {
     if (amount === 1) this.transition = null;
   }
 
-  applyFace(mood, amount, progress = 0) {
+  applyFace(mood, amount, progress = 0, userWeight = 1) {
     const acting = mood && !mood.loop;
     for (const item of this.face) {
       let offset = 0;
@@ -289,6 +295,7 @@ export class IdleController {
         offset=(item.role==='brow'?(surprised?.0014:-.0013):item.role==='mouth'?-.0007:.0003)*amount;
       }
       if(item.role==='mouth') offset *= 1-item.fraction;
+      if (this.expression) offset += this.expression.offset(item.role, item.side, item.fraction) * userWeight;
       item.bone.position.copy(item.rest).addScaledVector(item.y, offset * this.height);
     }
   }
@@ -308,12 +315,14 @@ export class IdleController {
     return true;
   }
 
-  update(delta) {
-    if (!this.supported || (!this.playing && this.gestureTime === null && !this.transition && !this.leek?.alpha && !this.reverse?.visible)) return;
+  update(delta, cameraPosition) {
+    if (!this.supported) return;
+    this.expression?.update(delta);
+    const tracking = this.look?.update(delta, cameraPosition);
     const c = this.config;
     if (this.playing) {
       this.time += delta;
-      if (this.time >= this.nextGaze) {
+      if ((!this.look || this.look.mode === 'idle') && this.time >= this.nextGaze) {
         // A glance, a pause, then return to center; avoid perpetual oscillation.
         const returning = this.gaze.targetX !== 0 || this.gaze.targetY !== 0;
         this.gaze.targetX = returning ? 0 : (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 0.6);
@@ -390,12 +399,17 @@ export class IdleController {
       pitch=-.06+.06*Math.sin(phase);yaw=.15*Math.sin(phase);roll=-.1*Math.sin(phase);
       eyeYaw=-.1*Math.sin(phase);gestureBlink=0;
     }
-    this.applyFace(mood, faceAmount, gestureProgress);
+    this.applyFace(mood, faceAmount, gestureProgress, 1-envelope);
+    const useTracking = this.look && this.look.mode !== 'idle';
+    const baseHeadPitch = useTracking ? tracking.headPitch : gaze.headY*c.headPitch;
+    const baseHeadYaw = useTracking ? tracking.headYaw : gaze.headX*c.headYaw;
+    const baseEyePitch = useTracking ? tracking.eyePitch : gaze.eyeY*c.eyePitch;
+    const baseEyeYaw = useTracking ? tracking.eyeYaw : gaze.eyeX*c.eyeYaw;
     this.applyPose(this.head,
-      gaze.headY * c.headPitch * (1 - envelope) + pitch * envelope,
-      gaze.headX * c.headYaw * (1 - envelope) + yaw * envelope,
-      -gaze.headX * c.headTilt * (1 - envelope) + roll * envelope);
-    for (const eye of this.eyes) this.applyPose(eye, gaze.eyeY * c.eyePitch * (1 - envelope), gaze.eyeX * c.eyeYaw * (1 - envelope) + eyeYaw * envelope);
+      baseHeadPitch * (1 - envelope) + pitch * envelope,
+      baseHeadYaw * (1 - envelope) + yaw * envelope,
+      (useTracking ? -baseHeadYaw*.2 : -gaze.headX*c.headTilt) * (1 - envelope) + roll * envelope);
+    for (const eye of this.eyes) this.applyPose(eye, baseEyePitch * (1 - envelope), baseEyeYaw * (1 - envelope) + eyeYaw * envelope);
     if (this.playing && this.gestureTime === null && this.blinkTime === null && this.time >= this.nextBlink) this.blinkTime = 0;
     let blink = 0;
     if (this.blinkTime !== null) {
@@ -407,7 +421,8 @@ export class IdleController {
         this.nextBlink = this.time + c.blinkIntervalMin + Math.random() * (c.blinkIntervalMax - c.blinkIntervalMin);
       }
     }
-    this.setBlink(Math.max(blink, gestureBlink));
+    const expressionLid = (this.expression?.values.lid || 0) * (1-envelope);
+    this.setBlink(MathUtils.lerp(expressionLid, 1, Math.max(blink, gestureBlink)));
     this.blendTransition(delta);
     this.reverse?.update(this.gestureTime || 0, delta);
     this.leek?.update(!!mood?.loop && this.gestureKind === 'leek', delta, c.action.leekFade, this.gestureTime === null ? 0 : -c.action.leekTilt*Math.sin(this.gestureTime*Math.PI*2/c.action.leekCycle));

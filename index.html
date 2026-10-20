@@ -32,6 +32,32 @@
         <div class="actions" role="group" aria-label="鏡頭預設">
           <button id="shoe-orbit" aria-pressed="false" aria-label="3 · 合乎周禮：鞋靴視角 360 度環繞" disabled>3 · 合乎周禮</button>
         </div>
+        <details class="face-panel" id="face-panel">
+          <summary>表情與眼神</summary>
+          <fieldset id="face-controls" disabled>
+            <legend class="sr-only">角色表情與眼神設定</legend>
+            <div class="actions expressions" role="group" aria-label="表情選擇">
+              <button type="button" data-expression="neutral" aria-pressed="true">自然</button>
+              <button type="button" data-expression="angry" aria-pressed="false">生氣</button>
+              <button type="button" data-expression="proud" aria-pressed="false">得意</button>
+              <button type="button" data-expression="shy" aria-pressed="false">害羞</button>
+              <button type="button" data-expression="surprised" aria-pressed="false">驚訝</button>
+            </div>
+            <label class="setting" for="expression-strength">表情強度 <output id="expression-value" for="expression-strength">80%</output>
+              <input id="expression-strength" type="range" min="0" max="100" step="1" value="80" />
+            </label>
+            <label class="setting" for="gaze-mode">眼神
+              <select id="gaze-mode">
+                <option value="camera" selected>看鏡頭</option>
+                <option value="point">看點擊位置</option>
+                <option value="idle">自然待機</option>
+                <option value="off">不追蹤</option>
+              </select>
+            </label>
+            <button type="button" id="face-closeup">臉部近看</button>
+          </fieldset>
+          <p class="hint" id="face-hint">動作播放時優先使用動作表情；重設視角可回到全身。</p>
+        </details>
         <p class="hint">拖曳旋轉 · 雙指縮放／平移<br />電腦：左鍵旋轉 · 滾輪縮放 · 右鍵平移</p>
         <details id="model-credit" class="credit" hidden><summary>模型來源與授權</summary><p><a href="https://sketchfab.com/3d-models/si-arknights-endfield-304e5f23db204cbd834b44138ca570d7" target="_blank" rel="noopener noreferrer">Si / Arknights Endfield</a> · <a href="https://sketchfab.com/Abcxyz51" target="_blank" rel="noopener noreferrer">Abcxyz51</a><br /><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · Sketchfab GLB 轉檔版本，原模型檔未改動；本站加入骨骼待機與原創互動</p></details>
         </div>

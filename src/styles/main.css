@@ -30,3 +30,17 @@ button:focus-visible, .button:has(+ input:focus-visible) { outline: 2px solid #c
 
 .credit summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-size: 11px; }
 .credit p { margin: 0 0 4px; }
+
+.panel { max-height: calc(100dvh - 110px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; }
+.face-panel { margin-top: 10px; border-top: 1px solid #ffffff20; }
+.face-panel summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-size: 13px; }
+.face-panel fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.face-panel fieldset:disabled { opacity: .45; }
+.expressions { gap: 6px; }
+.expressions button { padding: 8px 10px; }
+.expressions button[aria-pressed="true"] { background: #c8ddac; color: #20271c; border-color: #c8ddac; }
+.setting { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; margin: 10px 0; }
+.setting output { margin-left: auto; color: #c8ddac; }
+.setting input[type="range"] { width: 100%; min-height: 44px; margin: 0; accent-color: #c8ddac; }
+.setting select { flex: 1; min-height: 44px; padding: 8px; color: #fff; background: #33383a; border: 1px solid #ffffff32; border-radius: 7px; font: inherit; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

@@ -1,4 +1,5 @@
 import './styles/main.css';
+import { GazePointer } from './ui/GazePointer.js';
 import { loadingStatus } from './ui/loadingStatus.js';
 import { viewerConfig } from './config/viewerConfig.js';
 import { SceneManager } from './viewer/SceneManager.js';
@@ -10,6 +11,25 @@ const fileInput = document.querySelector('#model-file');
 const reset = document.querySelector('#reset');
 const idleButton = document.querySelector('#idle-toggle');
 const shoeButton = document.querySelector('#shoe-orbit');
+const faceControls = document.querySelector('#face-controls');
+const expressionButtons = [...document.querySelectorAll('[data-expression]')];
+const strengthInput = document.querySelector('#expression-strength');
+const gazeSelect = document.querySelector('#gaze-mode');
+const faceHint = document.querySelector('#face-hint');
+let expressionSelection = 'neutral';
+let gazePointer;
+
+function applyExpression() {
+  models?.setExpression(expressionSelection, Number(strengthInput.value)/100);
+  document.querySelector('#expression-value').value = `${strengthInput.value}%`;
+  for (const button of expressionButtons) button.setAttribute('aria-pressed', String(button.dataset.expression === expressionSelection));
+}
+
+function updateFaceHint() {
+  faceHint.textContent = faceControls.disabled ? '此模型不支援表情與眼神控制。' : gazeSelect.value === 'point'
+    ? '輕點 3D 畫面選擇注視位置；拖曳與雙指仍控制鏡頭。'
+    : '動作播放時優先使用動作表情；重設視角可回到全身。';
+}
 let previousShoeState;
 
 function syncShoeButton() {
@@ -78,6 +98,10 @@ async function loadModel(url, label, isDefault = false) {
     syncShoeButton();
     reset.disabled = false;
     idleButton.disabled = !model.idle.supported;
+    faceControls.disabled = !model.idle.expression;
+    applyExpression();
+    models.setGazeMode(gazeSelect.value);
+    updateFaceHint();
     syncGestureButtons();
     idleButton.textContent = model.idle.supported ? '暫停待機' : '模型不支援待機';
     idleButton.setAttribute('aria-pressed', String(model.idle.supported));
@@ -96,10 +120,24 @@ try {
     reset.disabled = true;
     idleButton.disabled = true;
     shoeButton.disabled = true;
+    faceControls.disabled = true;
     for (const button of gestureButtons) button.disabled = true;
   });
   camera = new CameraController(scene.camera, scene.renderer.domElement, viewerConfig);
   models = new ModelManager(scene.scene, viewerConfig);
+  gazePointer = new GazePointer(scene.renderer.domElement, scene.camera, viewerConfig.gaze,
+    () => gazeSelect.value === 'point' ? models.getGazeAnchor() : null,
+    (point) => models.setGazePoint(point));
+  for (const button of expressionButtons) button.addEventListener('click', () => {
+    expressionSelection = button.dataset.expression;
+    applyExpression();
+  });
+  strengthInput.addEventListener('input', applyExpression);
+  gazeSelect.addEventListener('change', () => { models.setGazeMode(gazeSelect.value); updateFaceHint(); });
+  document.querySelector('#face-closeup').addEventListener('click', () => {
+    camera.showStage(models.getFaceBounds());
+    syncShoeButton();
+  });
   const resize = () => {
     scene.resize();
     const viewport = document.querySelector('#viewport').getBoundingClientRect();
@@ -116,7 +154,7 @@ try {
   observer.observe(document.querySelector('#viewport'));
   observer.observe(document.querySelector('.panel'));
   resize();
-  scene.start((delta) => { camera.update(delta); models.update(delta); syncGestureButtons(); syncShoeButton(); });
+  scene.start((delta) => { camera.update(delta); models.update(delta, scene.camera.position); syncGestureButtons(); syncShoeButton(); });
   idleButton.addEventListener('click', () => {
     const playing = idleButton.getAttribute('aria-pressed') !== 'true';
     models.setIdlePlaying(playing);
@@ -156,6 +194,7 @@ window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   ++requestId;
   observer?.disconnect();
+  gazePointer?.dispose();
   camera?.dispose();
   models?.dispose();
   scene?.dispose();
