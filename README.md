@@ -14,6 +14,19 @@
 
 `RhythmEngine` 是獨立的絕對時鐘判定器；`RhythmGame` 管 UI、原生 Web Audio 與既有 render loop 的更新；`GameStage` 重用祀的舞步和實際手腕抓握。沒有額外 Renderer、RAF、物理引擎、排行榜服務或遊戲框架。
 
+## 查勤爬塔試作：管理員，你人呢？
+
+從遊戲區的「新試玩：查勤爬塔 →」進入，或直接開啟 [爬塔原型](https://oloid666.github.io/endfield-si-viewer/#climb)。這是原創同人小關卡：管理員偷溜來找祀，回程電梯停機，祀必須搭息壤階梯趕到接駁口；佩利卡催回船，莊方宜中途來電查勤。
+
+- 祀的既有 GLB 直接作為操作角色，附簡化移動、推拉、跨上一格的程序姿勢。固定斜前方鏡頭追蹤；使用側向單排 2.5D 關卡，尚不是四方向完整 3D 爬塔。
+- ←／→ 或 A／D 移動，遇一格高台自動攀爬。「搬箱」／空白鍵切換推拉模式，關閉後才能踩上亮框方塊；↶／Z 退一步，幾何與位置復原，時間不倒退。
+- 前段教學不計時；通過第一面高牆、接完來電後啟動 80 秒回船倒數與上升廢液。兩處高牆都需要搬動息壤搭路。
+- 橘色破損息壤踩過 2.8 秒崩塌。泡泡龍目前是明確標示的原創搜尋代替物，固定左右巡查；方塊能遮住視線，被發現量累積滿會失敗。沒有引入官方泡泡龍模型。
+- 莊方宜有兩個回覆選項與不同吐槽；讀取通訊、暫停及切到背景時凍結倒數、搜尋與崩解。勝敗都可重新開始，離場恢復原有模型展示或節奏遊戲。
+- `climbConfig` 集中關卡／時間設定；`ClimbEngine` 管整數格規則、撤回及狀態；`ClimbStage` 重用場景與人物並釋放自有材質／幾何；`ClimbGame` 管手機按鍵、通訊與 UI。仍只用一個 Canvas／渲染循環，未新增依賴。
+
+原型先驗證推拉、搜尋與查勤是否有趣；正式攀爬動畫、更多關卡、自由轉向、官方敵人模型、配音及正式美術尚未製作。息壤崩解、廢液設施與人物關係是本作二創規則。實體 iPhone Safari 效能仍待驗證。
+
 ## 本機啟動
 
 需要 Node.js 22.12+（或 20.19+）。
@@ -61,9 +74,13 @@ src/
   config/interactionConfig.js
   config/characters.js
   config/gameConfig.js
+  config/climbConfig.js
   game/RhythmEngine.js
   game/RhythmGame.js
   game/GameStage.js
+  game/ClimbEngine.js
+  game/ClimbGame.js
+  game/ClimbStage.js
   viewer/SceneManager.js
   viewer/ModelManager.js
   viewer/ModelTransfer.js

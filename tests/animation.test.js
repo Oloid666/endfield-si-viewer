@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Bone, Box3, Group, Matrix4, PerspectiveCamera, Vector3 } from 'three';
+import { Bone, Box3, BoxGeometry, Group, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera, Vector3 } from 'three';
+import { ClimbStage } from '../src/game/ClimbStage.js';
+import { ClimbEngine } from '../src/game/ClimbEngine.js';
+import { climbConfig } from '../src/config/climbConfig.js';
 import { CameraController } from '../src/viewer/CameraController.js';
 import { PhotographyController } from '../src/viewer/PhotographyController.js';
 import { ViewerDialogue, expressionBand } from '../src/ui/ViewerDialogue.js';
@@ -632,4 +635,18 @@ test('Zhuang view anchors enable close-up and three shoe presets without applyin
  assert(manager.getGazeAnchor().position.equals(byNode(83).getWorldPosition(new Vector3())));assert(manager.getFaceBounds());
  const shoes=manager.getShoePresets();assert.equal(shoes.length,3);assert(shoes[0].getSize(new Vector3()).length()>shoes[1].getSize(new Vector3()).length());assert(shoes[1].getSize(new Vector3()).length()>shoes[2].getSize(new Vector3()).length());
  idle.dispose();
+});
+
+test('climb stage preserves an off-center asset floor through scaling/rotation and restores the viewer',()=>{
+ const idle=fixture(),group=new Group(),probe=new Mesh(new BoxGeometry(1,2,1),new MeshBasicMaterial());
+ probe.position.set(2,6,.4);group.position.set(-2,-6,-.4);group.add(idle.root,probe);
+ const model={group,idle},world=new Group();world.add(group);
+ const scene={scene:world,camera:new PerspectiveCamera(40,390/844,.01,100),renderer:{domElement:{getBoundingClientRect:()=>({width:390,height:844})}}};
+ const controller={controls:{enabled:true},stopShoeOrbit(){}};
+ const stage=new ClimbStage(scene,controller,{current:model},climbConfig),engine=new ClimbEngine();
+ const original=group.position.clone();assert(stage.attach());stage.update(engine,0);world.updateMatrixWorld(true);
+ assert(Math.abs(new Box3().setFromObject(probe).min.y-engine.player.y)<1e-6,'feet remain on the platform, not above it');
+ stage.detach();assert(group.position.equals(original));assert(group.scale.equals(new Vector3(1,1,1)));assert(!stage.root.visible);
+ assert(stage.attach());stage.update(engine,0);let disposed=0;for(const g of stage.geometries)g.addEventListener('dispose',()=>disposed++);
+ stage.dispose();assert.equal(disposed,stage.geometries.length);assert(!stage.root.parent);idle.dispose();probe.geometry.dispose();probe.material.dispose();
 });
