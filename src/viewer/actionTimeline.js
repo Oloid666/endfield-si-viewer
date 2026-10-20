@@ -14,7 +14,7 @@ export function reverseBeat(time, config) {
     limbs: ramp(time,b.limbs,b.stare),
     attached: Math.min(1,attached),
     angle: first*config.swing*Math.sin((time-b.swing)*Math.PI*2/config.cycle)
-      + Math.PI*2*ramp(time,b.windmill,b.return),
+      + Math.PI*2*(config.windmillTurns || 1)*ramp(time,b.windmill,b.return),
     first, second,
     bow: windowWeight(time,b.bow,b.fade,.3),
     fade: 1-ramp(time,b.fade,config.duration),

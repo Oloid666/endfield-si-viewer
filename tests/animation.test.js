@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Bone, Box3, Group, Matrix4, PerspectiveCamera, Vector3 } from 'three';
 import { CameraController } from '../src/viewer/CameraController.js';
+import { PhotographyController } from '../src/viewer/PhotographyController.js';
+import { ViewerDialogue, expressionBand } from '../src/ui/ViewerDialogue.js';
+import { reverseBeat } from '../src/viewer/actionTimeline.js';
 import { ActionPanel } from '../src/ui/ActionPanel.js';
 import { IdleController } from '../src/viewer/IdleController.js';
 import { SceneManager } from '../src/viewer/SceneManager.js';
@@ -34,7 +37,7 @@ function fixture() {
   for (const root of gltf.scenes[gltf.scene || 0].nodes) scene.add(nodes[root]);
   scene.updateMatrixWorld(true);
   const idle = new IdleController({ scene, parser: { associations } }, viewerConfig.idle,
-    new Box3(new Vector3(-0.5, -1, -0.5), new Vector3(0.5, 1, 0.5)), undefined, viewerConfig.face, viewerConfig.gaze);
+    new Box3(new Vector3(-0.5, -1, -0.5), new Vector3(0.5, 1, 0.5)), undefined, viewerConfig.face, viewerConfig.gaze, viewerConfig.interactions.photography);
   idle.setPlaying(false);
   idle.update(1);
   return idle;
@@ -111,6 +114,9 @@ test('hands reach the waist and the support foot stays planted during a stomp', 
   assert(support.distanceTo(idle.legs.L.anchor) < .00001);
   assert(raised.y - idle.legs.R.anchor.y > idle.height*.04);
   idle.update(viewerConfig.idle.gestures.tsundere.duration * .07);
+  assert(idle.legs.L.solver.end.getWorldPosition(new Vector3()).distanceTo(idle.legs.L.anchor) < .00001);
+  assert(idle.legs.R.solver.end.getWorldPosition(new Vector3()).y > idle.legs.R.anchor.y,'cartoon aftershock lifts the free foot');
+  idle.update(viewerConfig.idle.gestures.tsundere.duration * .15);
   assert(idle.legs.R.solver.end.getWorldPosition(new Vector3()).distanceTo(idle.legs.R.anchor) < .00001);
 });
 
@@ -372,7 +378,7 @@ test('all three short plays finish automatically, restore the actor and release 
     const idle=fixture(),r=idle.reverse;
     const base=pose(idle);idle.playGesture(viewer,kind);
     const duration=viewerConfig.idle.gestures[kind].duration;
-    for(let i=0;i<Math.ceil((duration+1)*30);i++)idle.update(1/30);
+    for(let i=0;i<Math.ceil((duration+1)*30);i++){idle.update(1/30);if(idle.reverseChoice==='pending')idle.chooseReverse('extend');}
     assert.equal(idle.gestureTime,null,kind);assert.equal(r.active,false);assert.equal(r.landing,null);
     assert(r.actor.position.equals(r.base.position));assert(r.actor.scale.equals(r.base.scale));
     assert.equal(idle.leek.group.visible,false);assert.equal(r.leek.group.visible,false);
@@ -384,13 +390,13 @@ test('all three short plays finish automatically, restore the actor and release 
 });
 
 test('reverse story has a grounded fake ending, second grab, windmill and exact cancellation at every beat', () => {
-  for(const seconds of [1,4.5,7.5,10.2,11.7,15.6]){
+  for(const seconds of [1,4.5,7.5,10.2,13.7,18.6]){
     const idle=fixture();idle.playGesture(viewer,'reverse');
-    for(let t=0;t<seconds-1e-8;t+=.05)idle.update(Math.min(.05,seconds-t));
+    for(let t=0;t<seconds-1e-8;t+=.05){idle.update(Math.min(.05,seconds-t));if(idle.reverseChoice==='pending')idle.chooseReverse('extend');}
     const r=idle.reverse;
     assert.equal(r.segments.length,8,'four two-segment ink limbs');
     if(seconds===10.2){assert(r.actor.position.distanceTo(r.base.position)<1e-8);assert(r.actor.scale.distanceTo(r.base.scale)<1e-8);}
-    if(seconds===7.5||seconds===11.7){
+    if(seconds===7.5||seconds===13.7){
       const wrist=r.stage.worldToLocal(idle.arms.R.end.getWorldPosition(new Vector3()));
       assert(wrist.distanceTo(r.hand.position)<1e-5);assert(r.beat.attached>.99);
     }
@@ -510,4 +516,97 @@ test('small sketch hands over a single solid onion without overlapping copies', 
 test('leek dance contains two complete eight-beat phrases', () => {
   const c=viewerConfig.idle;assert(Math.abs((c.leekStory.beats.pose-c.leekStory.beats.dance)/(c.action.leekCycle/2)-16)<1e-8);
   assert.equal(c.leekStory.beats.big,c.leekStory.beats.dance+8*c.action.leekCycle/2);
+});
+
+test('reverse waits indefinitely at the choice with a frozen rig, and cancellation clears the choice', () => {
+  const idle=fixture();idle.playGesture(viewer,'reverse');idle.update(30);
+  assert.equal(idle.gestureTime,viewerConfig.idle.reverse.choiceAt);assert.equal(idle.reverseChoice,'pending');
+  const snapshot=pose(idle),actor=idle.reverse.actor.matrixWorld.clone(),clock=idle.time;
+  for(let i=0;i<120;i++)idle.update(.5,viewer);
+  close(pose(idle),snapshot);assert.equal(idle.time,clock);assert(idle.reverse.actor.matrixWorld.equals(actor));
+  assert.equal(idle.chooseReverse('invalid'),false);idle.stopGesture();idle.update(1);
+  assert.equal(idle.reverseChoice,null);assert.equal(idle.gestureTime,null);assert.equal(idle.reverse.visible,false);idle.dispose();
+});
+
+test('rescue actually skips the windmill and the second branch resumes after a longer fake ending', () => {
+  for(const choice of ['rescue','extend']){
+    const idle=fixture();idle.playGesture(viewer,'reverse');idle.update(10);
+    assert(idle.chooseReverse(choice));assert.equal(idle.chooseReverse(choice),false);
+    if(choice==='rescue'){
+      assert.equal(idle.gestureTime,null);assert.equal(idle.rescueTime,0);
+      for(let i=0;i<100;i++){idle.update(.05);assert(!idle.reverse.beat.second);}
+      assert.equal(idle.rescueTime,null);assert(idle.reverse.actor.scale.equals(idle.reverse.base.scale));
+    }else{
+      assert(viewerConfig.idle.reverse.beats.windmill-viewerConfig.idle.reverse.beats.rest>=2);
+      idle.update(1.5);assert.equal(idle.reverse.beat.second,0);idle.update(1);
+      assert(idle.reverse.beat.second>0);assert(idle.inkStage.tornado.visible);
+      idle.stopGesture();idle.update(1);assert(!idle.inkStage.root.visible);
+    }
+    idle.dispose();
+  }
+});
+
+test('windmill completes four revolutions and all additional GPU resources are disposed', () => {
+  const c=viewerConfig.idle.reverse;
+  assert.equal(reverseBeat(c.beats.return,c).angle,Math.PI*8);
+  const idle=fixture(),stage=idle.inkStage;assert.equal(stage.windRings.length,6);
+  let freed=0;for(const r of [stage.tornadoMaterial,stage.tornadoGeometry])r.addEventListener('dispose',()=>freed++);
+  idle.dispose();assert.equal(freed,2);assert.equal(stage.root.parent,null);
+});
+
+test('four expression bands have exact 50/100/150/200 boundaries and independent A/B rotations', () => {
+  assert.deepEqual([0,.01,.5,.51,1,1.01,1.5,1.51,2,4,NaN].map(expressionBand),[-1,0,0,1,1,2,2,3,3,3,-1]);
+  const original=globalThis.document;
+  globalThis.document={createElement:()=>({hidden:false,append(){},setAttribute(){},remove(){},dataset:{}})};
+  try{
+    const d=new ViewerDialogue({append(){}},viewerConfig.interactions.dialogue);
+    for(const selection of ['angry','proud','surprised'])for(const strength of [.5,1,1.5,2]){
+      d.expression(selection,strength);const a=d.session.line;
+      d.expression(selection,strength);const b=d.session.line;assert.notEqual(a,b);
+      d.expression(selection,strength);assert.equal(d.session.line,a);
+    }
+    d.expression('angry',0);assert.equal(d.session,null);
+    d.expression('proud',2);d.update(5);assert.equal(d.result.textContent,'申請駁回');assert.equal(d.speech.textContent,'……誰問你了。');
+    d.expression('surprised',2);d.update(5);assert.equal(d.result.textContent,'協議已更新：現在有了。');assert.equal(d.speech.textContent,'……你改的？');
+    d.expression('angry',2);d.update(1,true);assert.equal(d.session,null);d.dispose();
+  }finally{if(original)globalThis.document=original;else delete globalThis.document;}
+});
+
+test('photography responds to actual framing, cancels dwell on movement and triggers only once per visit', () => {
+  let lines=0;const photo=new PhotographyController(viewerConfig.interactions.photography,()=>{lines++;});
+  const camera=new PerspectiveCamera(),anchor={position:new Vector3(),height:2},target=new Vector3();camera.position.set(0,0,1);
+  const tick=(n,moving=false)=>{for(let i=0;i<n;i++)photo.update(.1,camera,target,anchor,false,moving);};
+  tick(30);assert.equal(lines,0);assert(photo.lean>.99);
+  tick(20,true);assert.equal(photo.dwell,0);tick(41);assert.equal(lines,1);tick(100);assert.equal(lines,1);
+  camera.position.z=4;tick(1);assert(!photo.close);assert.equal(photo.dwell,0);
+  camera.position.z=1;tick(42);assert.equal(lines,2);
+  photo.update(1,camera,target,anchor,true);assert.equal(photo.lean,0);assert.equal(photo.spoken,false);
+});
+
+test('close-up lean keeps both feet planted and yields to the authored action', () => {
+  const idle=fixture(),base=idle.spine.bone.quaternion.clone();idle.photoLean=1;idle.update(1,viewer);
+  assert(idle.spine.bone.quaternion.angleTo(base)>.08);
+  for(const {solver,anchor} of Object.values(idle.legs))assert(solver.end.getWorldPosition(new Vector3()).distanceTo(anchor)<1e-5);
+  const other=fixture();idle.playGesture(viewer,'tsundere');other.playGesture(viewer,'tsundere');idle.update(2);other.update(2);close(pose(idle),pose(other));idle.dispose();other.dispose();
+});
+
+test('back view travels around the model and gaze keeps its shoulder through the rear seam', () => {
+  const doc={addEventListener(){},removeEventListener(){}},element={style:{},addEventListener(){},removeEventListener(){},getRootNode:()=>doc,clientWidth:390,clientHeight:844};
+  const camera=new PerspectiveCamera(40,390/844,.01,100),controller=new CameraController(camera,element,viewerConfig);
+  const bounds=new Box3(new Vector3(-.5,-1,-.5),new Vector3(.5,1,.5));controller.setModel(bounds,[]);
+  const start=camera.position.clone();controller.showBack();controller.update(.55);
+  assert(camera.position.distanceTo(controller.controls.target)>1,'does not pass through the actor');assert(Math.abs(camera.position.x)>.5);
+  controller.update(.6);assert(camera.position.z<0);assert(Math.abs(camera.position.z+start.z)<1e-6);
+  const head=new Group();head.updateMatrixWorld(true);const gaze=new GazeController(head,viewerConfig.gaze);gaze.setMode('camera');
+  gaze.update(1,new Vector3(.2,0,-1));const before=gaze.angles.headYaw;gaze.update(.01,new Vector3(-.01,0,-1));assert(before*gaze.angles.headYaw>0);
+  assert(Math.abs(gaze.angles.headYaw)<=viewerConfig.gaze.rearHeadYawLimit);assert(gaze.angles.headYaw>.5);controller.dispose();
+});
+
+
+test('rejected pride visibly loses its smile and restores the selected expression after the payoff', () => {
+  const idle=fixture();idle.expression.setExpression('proud',2);idle.update(4);
+  const mouth=idle.face.find(x=>x.role==='mouth'&&x.side==='Right'),offset=mouth.bone.position.distanceTo(mouth.rest);
+  idle.dialogueReaction={selection:'proud'};idle.update(1);
+  assert(mouth.bone.position.distanceTo(mouth.rest)<offset*.2);assert(idle.eyelids[0].bone.position.equals(idle.eyelids[0].rest));
+  idle.dialogueReaction=null;idle.update(1);assert(Math.abs(mouth.bone.position.distanceTo(mouth.rest)-offset)<1e-8);idle.dispose();
 });

@@ -7,8 +7,11 @@ export class CameraController {
     this.config = config;
     this.controls = new OrbitControls(camera, element);
     this.shoeLevel=0;this.story=null;
-    this.onInteraction = () => { this.transition=null;this.stopShoeOrbit();if(this.story)this.story.manual=true; };
+    this.interacting=false;
+    this.onInteraction = () => { this.interacting=true;this.transition=null;this.stopShoeOrbit();if(this.story)this.story.manual=true; };
+    this.onInteractionEnd=()=>{this.interacting=false;};
     this.controls.addEventListener('start', this.onInteraction);
+    this.controls.addEventListener('end', this.onInteractionEnd);
     Object.assign(this.controls, {
       enableDamping: true,
       dampingFactor: config.controls.dampingFactor,
@@ -82,6 +85,16 @@ export class CameraController {
       this.camera.position.copy(startPosition);this.controls.target.copy(startTarget);
     }
   }
+  showBack() {
+    if(!this.modelBounds)return;
+    if(this.story)this.story.manual=true;
+    const startPosition=this.camera.position.clone(),startTarget=this.controls.target.clone();
+    const direction=startPosition.clone().sub(startTarget).normalize();
+    direction.applyAxisAngle(this.camera.up,Math.PI);
+    this.stopShoeOrbit();this.shoeLevel=0;this.frame(this.modelBounds,false,direction);
+    this.transition={time:0,startPosition,startTarget,endPosition:this.camera.position.clone(),endTarget:this.controls.target.clone(),orbit:true,
+      startAngle:Math.atan2(direction.x,direction.z)-Math.PI,endAngle:Math.atan2(direction.x,direction.z),startDistance:startPosition.distanceTo(startTarget)};
+  }
   advanceShoeView(){
     const next=(this.shoeLevel+1)%4;
     if(!next){this.reset(true);return 0;}
@@ -96,7 +109,7 @@ export class CameraController {
   get shoeOrbitActive(){return !!(this.controls.autoRotate||this.transition?.resumeOrbit);}
   startStory(kind){this.story={kind,shot:'',manual:false};this.stopShoeOrbit();this.shoeLevel=0;}
   updateStory(idle,models){
-    if(!this.story||this.story.manual||idle?.gestureTime==null)return;
+    if(!this.story||this.story.manual||idle?.gestureTime==null||idle.reverseChoice==='pending')return;
     const kind=this.story.kind,t=idle.gestureTime,c=this.config.idle;
     let shot='full',bounds=models.current.bounds;
     if(kind==='leek'){
@@ -124,12 +137,16 @@ export class CameraController {
     if (this.transition) {
       const t = this.transition;
       t.time += delta;
-      const weight = MathUtils.smoothstep(t.time, 0, .55);
-      this.camera.position.lerpVectors(t.startPosition, t.endPosition, weight);
+      const weight = MathUtils.smoothstep(t.time, 0, t.orbit?1.1:.55);
       this.controls.target.lerpVectors(t.startTarget, t.endTarget, weight);
+      if(t.orbit){
+        const angle=MathUtils.lerp(t.startAngle,t.endAngle,weight),distance=MathUtils.lerp(t.startDistance,t.endPosition.distanceTo(t.endTarget),weight);
+        const y=MathUtils.lerp(t.startPosition.y-t.startTarget.y,t.endPosition.y-t.endTarget.y,weight),radius=Math.sqrt(Math.max(0,distance*distance-y*y));
+        this.camera.position.set(this.controls.target.x+Math.sin(angle)*radius,this.controls.target.y+y,this.controls.target.z+Math.cos(angle)*radius);
+      }else this.camera.position.lerpVectors(t.startPosition, t.endPosition, weight);
       if (weight === 1) { const resume=t.resumeOrbit;this.transition=null;if(resume)this.controls.autoRotate=true; }
     }
     this.controls.update(delta);
   }
-  dispose() { this.stopShoeOrbit(); this.controls.removeEventListener('start', this.onInteraction); this.controls.dispose(); }
+  dispose() { this.stopShoeOrbit(); this.controls.removeEventListener('start', this.onInteraction); this.controls.removeEventListener('end',this.onInteractionEnd);this.controls.dispose(); }
 }

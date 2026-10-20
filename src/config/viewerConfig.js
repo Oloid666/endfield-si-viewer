@@ -1,7 +1,9 @@
+import { interactionConfig } from './interactionConfig.js';
+
 const faceFrame = (time, values={}) => ({time,yaw:0,pitch:0,roll:0,eyeYaw:0,lid:0,viewer:0,face:1,browLeft:-.0009,browRight:-.0004,mouthLeft:-.0005,mouthRight:.0001,cheek:0,...values});
 
 // Distances are fractions of model height; rotations are radians.
-export const viewerConfig = { background: 0x242629,
+export const viewerConfig = { interactions: interactionConfig, background: 0x242629,
   modelPath: 'models/si.glb',
   renderer: { maxPixelRatio: 1.5, antialias: true },
   camera:
@@ -43,7 +45,7 @@ export const viewerConfig = { background: 0x242629,
       surprised: { browLeftInner: 0.0028, browLeftOuter: 0.0017, browRightInner: 0.0028, browRightOuter: 0.0017, mouthLeft: -0.0005, mouthRight: -0.0005, cheek: 0.0001, lid: -0.17, headPitch: -0.045, headYaw: 0.025, headRoll: 0.08 },
     },
   },
-  gaze: { headYawLimit: 0.5, headPitchLimit: 0.22, eyeYawLimit: 0.19, eyePitchLimit: 0.1, headShare: 0.8, headResponse: 3.5, eyeResponse: 14, tapTolerance: 8, tapMaxMs: 450, pointPlaneDistance: 0.75 },
+  gaze: { headYawLimit: 0.5, rearHeadYawLimit: .95, headPitchLimit: 0.22, eyeYawLimit: 0.19, eyePitchLimit: 0.1, headShare: 0.8, headResponse: 3.5, eyeResponse: 14, tapTolerance: 8, tapMaxMs: 450, pointPlaneDistance: 0.75 },
   idle:
    { blinkIntervalMin: 3,
      blinkIntervalMax: 6,
@@ -112,7 +114,7 @@ export const viewerConfig = { background: 0x242629,
             [ { time: 0, yaw: 0, pitch: 0, roll: 0, eyeYaw: 0, lid: 0, viewer: 0, face: 0, browLeft: 0, browRight: 0, mouthLeft: 0, mouthRight: 0, cheek: 0 },
               { time: 1, yaw: 0, pitch: 0, roll: 0, eyeYaw: 0, lid: 0, viewer: 0, face: 0, browLeft: 0, browRight: 0, mouthLeft: 0, mouthRight: 0, cheek: 0 } ] },
         reverse:
-         { duration: 17.8,
+         { duration: 21.8,
            loop: false,
            hips: [ 0, 0, 0 ],
            body: {},
@@ -136,16 +138,17 @@ export const viewerConfig = { background: 0x242629,
         stompTorsoPitch: 0.1,
         stompTorsoRoll: -0.055,
         stompExtra: { lift: 0.035, forward: 0.02, impact: 0.008, hipShift: 0.012 },
+        aftershock: { start: .77, end: .9, frequency: 28, lift: .018, torso: .08 },
         leekCycle: .9375,
         leekFade: 0.28,
         leekHand: [ -0.17, 0.2, 0.085 ],
         leekSwing: 0.055,
         leekTilt: 0.5 },
-     theater: { strokeCount: 8, paperFade: .45, stompTime: 7.5, strokeWindow: [4.6,12.1],
+     theater: { strokeCount: 8, tornadoRings: 6, tornadoSpecks: 6, paperFade: .45, stompTime: 7.5, strokeWindow: [4.6,12.1],
        captions: {
          tsundere: [[0,2.2,'祀 OS','才沒在等你。'],[2.2,4.7,'祀 OS','不看。'],[4.7,6.5,'祀 OS','……就一眼。'],[6.5,8.7,'祀 OS','你怎麼還在看！'],[8.7,9.75,'','第二眼']],
          leek: [[0,3.5,'祀 OS','簡單示範一下。'],[3.5,4.6,'','畫好了。'],[8.35,10.2,'祀 OS','整齊一點。'],[12,13.6,'祀 OS','我說停。'],[13.6,15.2,'小蔥 OS','她應該沒看到。']],
-         reverse: [[0,2.6,'祀 OS','這次畫個大的。'],[2.6,4,'祀 OS','我還沒畫手。'],[4.8,6.1,'蔥','換我。'],[6.1,9.2,'祀 OS','我不是蔥。'],[9.2,11.1,'祀 OS','好，還算聽話。'],[11.1,13.1,'蔥','還有八拍。']],
+         reverse: [[0,2.6,'祀 OS','這次畫個大的。'],[2.6,4,'祀 OS','我還沒畫手。'],[4.8,6.1,'蔥','換我。'],[6.1,8.1,'祀 OS','我不是蔥。'],[8.1,10,'祀','管理員，管一下啊！'],[10,11.1,'祀 OS','……總算結束了。'],[11.1,12.1,'祀','……我是叫你救我。'],[12.1,13.6,'蔥','還有八拍。'],[13.6,16.1,'祀','不是叫你管這個！']],
        } },
      drawing: { start: .7, smallEnd: 3.4, revealEnd: 3.9, takeEnd: 4.6, giantInterrupt: 2.6, giantProgress: .58, brushLength: .23, fade: .24,
        smallOrigin: [-.27,.54,.42], penPole: [-.4,.3,.3] },
@@ -158,8 +161,8 @@ export const viewerConfig = { background: 0x242629,
        cowlick: { length: .072, width: .012, angle: -.55, amplitude: .28, frequency: 6 },
      }, stemLength: 0.13, stemRadius: 0.009, leafLength: 0.18, leafWidth: 0.03, trailSamples: 12, trailWidth: 0.006, trailStep: 0.0333333 },
      reverse:
-      { duration: 17.8, birthDepth: .28, cycle: 1.25, entry: 0.75, landing: 0.65, characterScale: 0.56, swing: 1.35, leekScale: 3.2, leekX: -0.42, leekY: 0.22, gripY: 0.78, gripX: 0.04, armRadius: 0.014,
-        beats: { limbs: 2.6, stare: 4, grab: 5.5, swing: 6.1, release: 9.2, rest: 10, windmill: 11.1, return: 12.5, bow: 13.1, writeEnd: 15.5, fade: 17.2 } } },
+      { duration: 21.8, windmillTurns: 4, choiceAt: 10, contractAt: 11.1, rescueDuration: 3.8, birthDepth: .28, cycle: 1.25, entry: 0.75, landing: 0.65, characterScale: 0.56, swing: 1.35, leekScale: 3.2, leekX: -0.42, leekY: 0.22, gripY: 0.78, gripX: 0.04, armRadius: 0.014,
+        beats: { limbs: 2.6, stare: 4, grab: 5.5, swing: 6.1, release: 9.2, rest: 10, windmill: 12.1, return: 16.1, bow: 17.1, writeEnd: 19.5, fade: 21.2 } } },
   lights:
    { ambient: { color: 16777215, intensity: 0.65 },
      directional: { color: 16772572, intensity: 2.6, position: [ -3, 5, 4 ] },

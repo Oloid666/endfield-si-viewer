@@ -36,14 +36,19 @@ function sampleTrack(points, time, key = 1) {
 
 // Runtime pose offsets only: never edit the GLB or rebuild its skeleton.
 export class IdleController {
-  constructor(gltf, config, bounds, actor = gltf.scene, faceConfig = null, gazeConfig = null) {
+  constructor(gltf, config, bounds, actor = gltf.scene, faceConfig = null, gazeConfig = null, photographyConfig = null) {
     this.config = config;
+    this.photographyConfig = photographyConfig;
     this.time = 0;
     this.awaySign = 1;
     this.playing = true;
     this.nextBlink = config.blinkIntervalMin;
     this.blinkTime = null;
     this.gestureTime = null;
+    this.reverseChoice = null;
+    this.rescueTime = null;
+    this.photoLean = 0;
+    this.dialogueReaction = null;
     this.gaze = { targetX: 0, targetY: 0, eyeX: 0, eyeY: 0, headX: 0, headY: 0 };
     this.nextGaze = config.gazeIntervalMin;
     this.eyes = [];
@@ -268,9 +273,13 @@ export class IdleController {
     this.offset.setFromAxisAngle(this.spine.x, stomp*action.stompTorsoPitch*(1+boost*.4)+impact*impactDepth);
     this.offset.multiply(this.axisOffset.setFromAxisAngle(this.spine.z, stomp*action.stompTorsoRoll));
     this.spine.bone.quaternion.multiply(this.offset);
+    const after = action.aftershock;
+    const recoil = after ? Math.max(0,Math.sin((progress-after.start)*Math.PI*after.frequency))
+      * ramp(progress,after.start,after.start+.015)*(1-ramp(progress,after.end-.025,after.end)) : 0;
+    this.spine.bone.quaternion.multiply(this.axisOffset.setFromAxisAngle(this.spine.z,recoil*(after?.torso||0)));
     this.reachHand('L',c.action.waistHands[0],c.action.elbowPoles[0],hands);
     this.reachHand('R',c.action.waistHands[1],c.action.elbowPoles[1],hands);
-    this.plantFeet(stomp*lift,stomp*forward);
+    this.plantFeet(stomp*lift+recoil*(after?.lift||0),stomp*forward);
     for(const finger of this.fingers)finger.bone.quaternion.copy(finger.rest).multiply(this.axisOffset.setFromAxisAngle(finger.axis,.22*hands));
   }
 
@@ -330,13 +339,14 @@ export class IdleController {
         offset=(item.role==='brow'?(surprised?.0014:-.0013):item.role==='mouth'?-.0007:.0003)*amount;
       }
       if(item.role==='mouth') offset *= 1-item.fraction;
-      if (this.expression) offset += this.expression.offset(item.role, item.side, item.fraction) * userWeight;
+      const deflated = !mood && this.dialogueReaction?.selection === 'proud';
+      if (this.expression) offset += this.expression.offset(item.role, item.side, item.fraction) * userWeight * (deflated && item.role === 'mouth' ? .1 : 1);
       item.bone.position.copy(item.rest).addScaledVector(item.y, offset * this.height);
     }
   }
 
   playGesture(cameraPosition, kind = 'tsundere') {
-    if (!this.head || this.gestureTime !== null || this.reverse?.landing || !Object.hasOwn(this.config.gestures, kind)) return false;
+    if (!this.head || this.gestureTime !== null || this.reverse?.landing || this.rescueTime !== null || !Object.hasOwn(this.config.gestures, kind)) return false;
     this.beginTransition(this.config.transitionDuration);
     this.gestureKind = kind;
     this.gesturePose = {};
@@ -346,12 +356,24 @@ export class IdleController {
     this.gesturePitch = MathUtils.clamp(-Math.atan2(this.lookDirection.y, Math.hypot(this.lookDirection.x, this.lookDirection.z)), -this.config.gesturePitchLimit, this.config.gesturePitchLimit);
     this.awaySign = this.gestureYaw >= 0 ? -1 : 1;
     this.gestureTime = 0;
+    this.reverseChoice = null;
+    this.photoLean = 0;
     if(kind==='reverse')this.reverse.start();
     return true;
   }
 
   update(delta, cameraPosition) {
     if (!this.supported) return;
+    // Hold the complete authored pose indefinitely; rendering and camera remain live.
+    if (this.reverseChoice === 'pending') return;
+    if (this.gestureKind === 'reverse' && this.gestureTime !== null && this.reverseChoice === null && this.gestureTime + delta >= this.config.reverse.choiceAt) {
+      delta = Math.max(0,this.config.reverse.choiceAt-this.gestureTime);
+      this.reverseChoice = 'pending';
+    }
+    if (this.rescueTime !== null) {
+      this.rescueTime += delta;
+      if (this.rescueTime >= this.config.reverse.rescueDuration) this.rescueTime = null;
+    }
     this.expression?.update(delta);
     const tracking = this.look?.update(delta, cameraPosition);
     const c = this.config;
@@ -448,9 +470,21 @@ export class IdleController {
 
     }
     this.applyFace(mood, faceAmount, gestureProgress, 1-envelope);
+    const photo = mood ? 0 : this.photoLean;
+    if (photo > .001 && this.photographyConfig) {
+      this.spine.bone.quaternion.multiply(this.axisOffset.setFromAxisAngle(this.spine.x,this.photographyConfig.leanPitch*photo));
+      this.hips.bone.position.addScaledVector(this.hips.z,-this.photographyConfig.leanOffset*this.height*photo);
+      this.plantFeet();
+    }
     const useTracking = this.look && this.look.mode !== 'idle';
-    const baseHeadPitch = useTracking ? tracking.headPitch : gaze.headY*c.headPitch;
-    const baseHeadYaw = useTracking ? tracking.headYaw : gaze.headX*c.headYaw;
+    let baseHeadPitch = useTracking ? tracking.headPitch : gaze.headY*c.headPitch;
+    let baseHeadYaw = useTracking ? tracking.headYaw : gaze.headX*c.headYaw;
+    baseHeadPitch += photo*.08;
+    if (!mood && this.rescueTime !== null) baseHeadYaw += .25*ramp(this.rescueTime,.5,1.5);
+    if (!mood && this.dialogueReaction) {
+      baseHeadYaw += this.dialogueReaction.selection === 'surprised' ? -.2 : .1;
+      baseHeadPitch += this.dialogueReaction.selection === 'proud' ? .08 : 0;
+    }
     const baseEyePitch = useTracking ? tracking.eyePitch : gaze.eyeY*c.eyePitch;
     const baseEyeYaw = useTracking ? tracking.eyeYaw : gaze.eyeX*c.eyeYaw;
     const expressionHead = this.expression?.values;
@@ -470,7 +504,7 @@ export class IdleController {
         this.nextBlink = this.time + c.blinkIntervalMin + Math.random() * (c.blinkIntervalMax - c.blinkIntervalMin);
       }
     }
-    const expressionLid = (this.expression?.values.lid || 0) * (1-envelope);
+    const expressionLid = (this.dialogueReaction?.selection === 'proud' && !mood ? 0 : this.expression?.values.lid || 0) * (1-envelope);
     this.setBlink(MathUtils.lerp(expressionLid, 1, Math.max(blink, gestureBlink)));
     this.blendTransition(delta);
     if(mood && this.gestureKind==='reverse' && this.gestureTime===null){this.reverse.update(mood.duration,0);this.reverse.stop();}
@@ -496,6 +530,8 @@ export class IdleController {
   }
 
   stopGesture() {
+    this.reverseChoice = null;
+    if (this.rescueTime !== null) { this.rescueTime = null; return true; }
     if(this.gestureTime === null)return false;
     this.beginTransition(this.gestureKind==='reverse'?this.config.reverse.landing:this.config.transitionDuration);
     this.reverse?.stop();
@@ -503,7 +539,15 @@ export class IdleController {
     return true;
   }
 
+  chooseReverse(choice) {
+    if (this.reverseChoice !== 'pending' || !['rescue','extend'].includes(choice)) return false;
+    if (choice === 'rescue') { this.stopGesture(); this.rescueTime = 0; }
+    this.reverseChoice = choice;
+    return true;
+  }
+
   setPlaying(playing) {
+    this.reverseChoice = null; this.rescueTime = null;
     this.reverse?.stop();
     if (this.transitionBones) this.beginTransition(this.config.transitionDuration);
     this.playing = playing;

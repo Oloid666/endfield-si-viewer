@@ -8,6 +8,8 @@ import { viewerConfig } from './config/viewerConfig.js';
 import { SceneManager } from './viewer/SceneManager.js';
 import { ModelManager } from './viewer/ModelManager.js';
 import { CameraController } from './viewer/CameraController.js';
+import { ViewerDialogue } from './ui/ViewerDialogue.js';
+import { PhotographyController } from './viewer/PhotographyController.js';
 
 const status = document.querySelector('#status');
 const fileInput = document.querySelector('#model-file');
@@ -25,6 +27,8 @@ let comics;
 let theater;
 let background;
 let cameraMode = 'full';
+let dialogue;
+let photography;
 const quickStop = document.querySelector('#quick-stop');
 strengthInput.value = String(viewerConfig.face.defaultStrength*100);
 function showFace() {
@@ -61,7 +65,7 @@ let previousGestureState;
 
 function syncGestureButtons() {
   const idle = models?.current?.idle;
-  const settling=!!(idle?.reverse?.landing||idle?.transition||idle?.drawing?.busy||idle?.leek?.alpha||idle?.chorus?.entries.some(({prop})=>prop.alpha>0));
+  const settling=!!(idle?.rescueTime!=null||idle?.reverse?.landing||idle?.transition||idle?.drawing?.busy||idle?.leek?.alpha||idle?.chorus?.entries.some(({prop})=>prop.alpha>0));
   const active=idle?.gestureTime!=null?idle.gestureKind:actionPanel?.session&&settling?'settling':'';
   if(actionPanel?.session&&!active){camera?.endStory();actionPanel.update(false);}
   quickStop.hidden = !active || panelToggle.getAttribute('aria-expanded') === 'true';
@@ -105,6 +109,7 @@ function showStatus(message, error = false) {
 async function loadModel(url, label, isDefault = false) {
   const id = ++requestId;
   actionPanel.cancel();
+  dialogue?.cancel();photography?.reset();
   showStatus(`載入 ${label}…`);
   try {
     const model = await models.load(url, (event) => {
@@ -117,6 +122,7 @@ async function loadModel(url, label, isDefault = false) {
     camera.setModel(model.bounds, models.getShoePresets());
     cameraMode = 'full';
     document.querySelector('#full-body').disabled = false;
+    document.querySelector('#back-view').disabled = false;
     document.querySelector('#face-closeup').disabled = !model.idle.expression;
     shoeButton.disabled = false;
     syncShoeButton();
@@ -151,6 +157,8 @@ try {
   theater = new InkTheater(document.querySelector('#viewport'),document.querySelector('#app'),viewerConfig.idle.theater);
   background = scene.scene.background;
   comics = new ComicEffects(document.querySelector('#viewport'), viewerConfig.face.comic);
+  dialogue = new ViewerDialogue(document.querySelector('#app'),viewerConfig.interactions.dialogue);
+  photography = new PhotographyController(viewerConfig.interactions.photography,line=>dialogue.cameraLine(line));
   camera = new CameraController(scene.camera, scene.renderer.domElement, viewerConfig);
   models = new ModelManager(scene.scene, viewerConfig);
   gazePointer = new GazePointer(scene.renderer.domElement, scene.camera, viewerConfig.gaze,
@@ -159,8 +167,10 @@ try {
   for (const button of expressionButtons) button.addEventListener('click', () => {
     expressionSelection = button.dataset.expression;
     applyExpression(); showFace();
+    dialogue.expression(expressionSelection,Number(strengthInput.value)/100);
   });
-  strengthInput.addEventListener('input', () => { applyExpression(); showFace(); });
+  strengthInput.addEventListener('input', () => { dialogue.cancel();applyExpression(); showFace(); });
+  strengthInput.addEventListener('change',()=>dialogue.expression(expressionSelection,Number(strengthInput.value)/100));
   gazeSelect.addEventListener('change', () => { models.setGazeMode(gazeSelect.value); updateFaceHint(); showFace(); });
   document.querySelector('#face-closeup').addEventListener('click', () => {
     cameraMode = 'full'; showFace();
@@ -182,10 +192,15 @@ try {
   observer.observe(document.querySelector('#viewport'));
   observer.observe(document.querySelector('.panel'));
   resize();
-  scene.start((delta) => { camera.update(delta); models.update(delta, scene.camera.position); camera.updateStory(models.current?.idle,models); syncGestureButtons(); syncShoeButton();
+  scene.start((delta) => { camera.update(delta);
     const idle = models.current?.idle;
+    const busy=!!(idle?.gestureTime!=null||idle?.rescueTime!=null||idle?.reverse?.landing||idle?.transition);
+    if(idle)idle.photoLean=photography.update(delta,scene.camera,camera.controls.target,models.getGazeAnchor(),busy,!!camera.transition||camera.interacting);
+    if(!photography.close&&dialogue.session?.camera)dialogue.cancel();
+    if(idle)idle.dialogueReaction=dialogue.update(delta,busy);
+    models.update(delta,scene.camera.position);camera.updateStory(idle,models);syncGestureButtons();syncShoeButton();
     scene.scene.background = theater.update(idle,delta) ? null : background;
-    comics.update(delta, scene.camera, models.getGazeAnchor(), idle?.expression, idle?.gestureTime != null || idle?.reverse?.landing);
+    comics.update(delta, scene.camera, models.getGazeAnchor(), idle?.expression, busy);
   });
   idleButton.addEventListener('click', () => {
     const playing = idleButton.getAttribute('aria-pressed') !== 'true';
@@ -196,6 +211,7 @@ try {
   const fullView = () => { if(camera.story)camera.story.manual=true;cameraMode = 'full'; camera.reset(); syncShoeButton(); };
   reset.addEventListener('click', fullView);
   document.querySelector('#full-body').addEventListener('click', fullView);
+  document.querySelector('#back-view').addEventListener('click',()=>{dialogue.cancel();cameraMode='back';camera.showBack();syncShoeButton();});
   quickStop.addEventListener('click', () => { models.stopGesture(); syncGestureButtons(); });
   shoeButton.addEventListener('click', () => {
     cameraMode = 'shoe';
@@ -205,6 +221,7 @@ try {
   for (const button of gestureButtons) button.addEventListener('click', () => {
     if (models.current?.idle.gestureKind === button.dataset.gesture && models.current.idle.gestureTime !== null) models.stopGesture();
     else if (models.playGesture(scene.camera.position, button.dataset.gesture)) {
+      dialogue.cancel();photography.reset();
       cameraMode = 'action';
       actionPanel.start();
       camera.startStory(button.dataset.gesture);
@@ -237,6 +254,7 @@ window.addEventListener('pagehide', (event) => {
   gazePointer?.dispose();
   comics?.dispose();
   theater?.dispose();
+  dialogue?.dispose();
   camera?.dispose();
   models?.dispose();
   scene?.dispose();
