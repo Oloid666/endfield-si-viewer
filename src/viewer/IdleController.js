@@ -234,10 +234,20 @@ export class IdleController {
     if(progress>=1)return;
     const c=this.config, curves=c.gestureTiming.tsundere;
     const hands=sampleTrack(curves.hands,progress), stomp=sampleTrack(curves.stomp,progress), impact=sampleTrack(curves.impact,progress);
-    this.hips.bone.position.addScaledVector(this.hips.y,-impact*this.height*.008);
+    const boost = this.expression?.bodyBoost || 0;
+    const action = c.action, extra = action.stompExtra;
+    const lift = action.stompLift + boost*extra.lift;
+    const forward = action.stompForward + boost*extra.forward;
+    const impactDepth = action.stompImpact + boost*extra.impact;
+    this.hips.bone.position
+      .addScaledVector(this.hips.x, stomp*this.height*(action.stompHipShift+boost*extra.hipShift))
+      .addScaledVector(this.hips.y, -this.height*(Math.max(0,impact)*impactDepth+stomp*action.stompCrouch));
+    this.offset.setFromAxisAngle(this.spine.x, stomp*action.stompTorsoPitch*(1+boost*.4)+impact*impactDepth);
+    this.offset.multiply(this.axisOffset.setFromAxisAngle(this.spine.z, stomp*action.stompTorsoRoll));
+    this.spine.bone.quaternion.multiply(this.offset);
     this.reachHand('L',c.action.waistHands[0],c.action.elbowPoles[0],hands);
     this.reachHand('R',c.action.waistHands[1],c.action.elbowPoles[1],hands);
-    this.plantFeet(stomp*c.action.stompLift,stomp*c.action.stompForward);
+    this.plantFeet(stomp*lift,stomp*forward);
     for(const finger of this.fingers)finger.bone.quaternion.copy(finger.rest).multiply(this.axisOffset.setFromAxisAngle(finger.axis,.22*hands));
   }
 
@@ -405,10 +415,11 @@ export class IdleController {
     const baseHeadYaw = useTracking ? tracking.headYaw : gaze.headX*c.headYaw;
     const baseEyePitch = useTracking ? tracking.eyePitch : gaze.eyeY*c.eyePitch;
     const baseEyeYaw = useTracking ? tracking.eyeYaw : gaze.eyeX*c.eyeYaw;
+    const expressionHead = this.expression?.values;
     this.applyPose(this.head,
-      baseHeadPitch * (1 - envelope) + pitch * envelope,
-      baseHeadYaw * (1 - envelope) + yaw * envelope,
-      (useTracking ? -baseHeadYaw*.2 : -gaze.headX*c.headTilt) * (1 - envelope) + roll * envelope);
+      (baseHeadPitch + (expressionHead?.headPitch || 0)) * (1 - envelope) + pitch * envelope,
+      (baseHeadYaw + (expressionHead?.headYaw || 0)) * (1 - envelope) + yaw * envelope,
+      ((useTracking ? -baseHeadYaw*.2 : -gaze.headX*c.headTilt) + (expressionHead?.headRoll || 0)) * (1 - envelope) + roll * envelope);
     for (const eye of this.eyes) this.applyPose(eye, baseEyePitch * (1 - envelope), baseEyeYaw * (1 - envelope) + eyeYaw * envelope);
     if (this.playing && this.gestureTime === null && this.blinkTime === null && this.time >= this.nextBlink) this.blinkTime = 0;
     let blink = 0;

@@ -44,3 +44,5 @@ button:focus-visible, .button:has(+ input:focus-visible) { outline: 2px solid #c
 .setting input[type="range"] { width: 100%; min-height: 44px; margin: 0; accent-color: #c8ddac; }
 .setting select { flex: 1; min-height: 44px; padding: 8px; color: #fff; background: #33383a; border: 1px solid #ffffff32; border-radius: 7px; font: inherit; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+.setting output.exaggerated { color: #f3cb8c; }
