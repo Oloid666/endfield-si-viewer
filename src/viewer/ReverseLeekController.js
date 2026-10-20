@@ -46,19 +46,20 @@ export class ReverseLeekController {
   }
   mark(material){const mesh=new Mesh(this.sphereGeometry,material);this.ink.add(mesh);return mesh;}
   capture(){return {position:this.actor.position.clone(),quaternion:this.actor.quaternion.clone(),scale:this.actor.scale.clone()};}
-  point(x,y,z,out){out.set(this.center.x+x*this.height,this.floor+y*this.height,this.center.z+z*this.height);return this.stage.worldToLocal(out);}
+  point(x,y,z,out){out.set(this.center.x+x*this.height,this.floor+y*this.height,this.center.z+(z+(this.depth||0))*this.height);return this.stage.worldToLocal(out);}
   segment(mesh,a,b,width=1){
     mesh.position.copy(a).add(b).multiplyScalar(.5);this.delta.subVectors(b,a);
     mesh.quaternion.setFromUnitVectors(UP,this.unit.copy(this.delta).normalize());
     mesh.scale.set(this.height*this.config.armRadius*width*2.5,this.delta.length(),this.height*this.config.armRadius*width*2.5);
   }
   start(){this.active=true;this.landing=null;}
-  stop(){if(!this.active)return;this.active=false;this.landing={...this.capture(),elapsed:0,visibility:this.beat?.fade ?? 1};}
+  stop(){if(!this.active)return;this.active=false;this.landing={...this.capture(),elapsed:0,visibility:(this.beat?.fade ?? 1)*ramp(this.seconds||0,this.config.beats.limbs,this.config.beats.limbs+.45)};}
   update(seconds,delta){
     const c=this.config;
     let weight=0, limbWeight=0;
     if(this.active){
-      const beat=reverseBeat(seconds,c); this.beat=beat;
+      const beat=reverseBeat(seconds,c); this.beat=beat;this.seconds=seconds;
+      this.depth=c.birthDepth*(1-ramp(seconds,c.beats.grab,c.beats.swing));
       weight=beat.summon*beat.fade;limbWeight=beat.limbs*beat.fade;
       const phase=(seconds-c.beats.swing)*Math.PI*2/c.cycle;
       const sway=.025*Math.sin(phase)*beat.first;
@@ -98,6 +99,10 @@ export class ReverseLeekController {
         this.segment(this.segments[4+side*2],g,h,2.2);this.segment(this.segments[5+side*2],h,k,1.4);
         this.feet[side].position.copy(k);this.feet[side].scale.set(this.height*.063,this.height*.013,this.height*.045);
       }
+      if(seconds>=c.beats.bow&&seconds<c.beats.writeEnd){
+        this.point(onionX+.22+.06*Math.sin(seconds*9),.49+.04*Math.cos(seconds*8),.1,f);
+        this.segment(this.segments[2],d,e,1.3);this.segment(this.segments[3],e,f,.95);this.otherHand.position.copy(f);
+      }
       const dropTime=seconds-c.beats.limbs-.25;
       this.drop.visible=dropTime>0&&dropTime<.35;
       this.point(onionX-.24,.6-.7*Math.max(0,dropTime),.05,this.drop.position);
@@ -113,7 +118,9 @@ export class ReverseLeekController {
     this.ink.scale.setScalar(1); // Geometry is authored in stage space.
     this.material.opacity=limbWeight;
     this.leek.update(this.active,delta,this.active?c.entry:c.landing,0);
-    for(const material of this.leek.materials)material.opacity*=weight;
+    const birth=this.active?ramp(seconds,c.beats.limbs,c.beats.limbs+.45):1;
+    for(const material of this.leek.materials)material.opacity*=weight*birth;
+    if(this.active)this.leek.setReveal(MathUtils.lerp(.58,1,ramp(seconds,c.beats.grab,c.beats.swing)));
     const expression=this.active ? seconds<c.beats.limbs?'hidden':seconds<c.beats.grab?'peek':seconds<c.beats.bow?'serious':'smug' : 'hidden';
     this.leek.perform(seconds,expression,this.active && seconds<c.beats.grab?.35:0);
     this.leek.trail.visible=false;

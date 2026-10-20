@@ -1,4 +1,5 @@
 import './styles/main.css';
+import { ActionPanel } from './ui/ActionPanel.js';
 import { InkTheater } from './ui/InkTheater.js';
 import { ComicEffects } from './ui/ComicEffects.js';
 import { GazePointer } from './ui/GazePointer.js';
@@ -28,6 +29,7 @@ const quickStop = document.querySelector('#quick-stop');
 strengthInput.value = String(viewerConfig.face.defaultStrength*100);
 function showFace() {
   if (cameraMode === 'face') return;
+  if(camera.story)camera.story.manual=true;
   cameraMode = 'face'; camera.showStage(models.getFaceBounds(), true); syncShoeButton();
 }
 let gazePointer;
@@ -47,12 +49,11 @@ function updateFaceHint() {
 let previousShoeState;
 
 function syncShoeButton() {
-  const active = !!camera?.shoeOrbitActive;
-  if (active === previousShoeState) return;
-  previousShoeState = active;
-  shoeButton.textContent = active ? '停止環繞' : '合乎周禮';
-  shoeButton.setAttribute('aria-pressed', String(active));
-  shoeButton.setAttribute('aria-label', active ? '停止鞋靴環繞' : '合乎周禮：鞋靴視角 360 度環繞');
+  const level=camera?.shoeLevel||0,active=!!camera?.shoeOrbitActive;
+  const state=`${level}:${active}`;if(state===previousShoeState)return;previousShoeState=state;
+  const labels=['合乎周禮','合乎舟禮','給我飯盒','吃飽了'];
+  shoeButton.textContent=labels[level];shoeButton.setAttribute('aria-label',labels[level]);shoeButton.setAttribute('aria-pressed',String(level>0));
+  const hint=document.querySelector('#shoe-status');hint.hidden=!level;hint.textContent=level?viewerConfig.camera.shoes.stages[level-1].short:'';
 }
 const gestureButtons = [...document.querySelectorAll('[data-gesture]')];
 const gestureLabels = new Map(gestureButtons.map((button) => [button, button.textContent]));
@@ -60,8 +61,9 @@ let previousGestureState;
 
 function syncGestureButtons() {
   const idle = models?.current?.idle;
-  const active = idle?.gestureTime != null ? idle.gestureKind : idle?.reverse?.landing ? 'landing' : '';
-  if ((previousGestureState?.endsWith(':reverse') || previousGestureState?.endsWith(':landing')) && !active) camera?.reset();
+  const settling=!!(idle?.reverse?.landing||idle?.transition||idle?.drawing?.busy||idle?.leek?.alpha||idle?.chorus?.entries.some(({prop})=>prop.alpha>0));
+  const active=idle?.gestureTime!=null?idle.gestureKind:actionPanel?.session&&settling?'settling':'';
+  if(actionPanel?.session&&!active){camera?.endStory();actionPanel.update(false);}
   quickStop.hidden = !active || panelToggle.getAttribute('aria-expanded') === 'true';
   const state = `${!!idle?.head}:${active}`;
   if (state === previousGestureState) return;
@@ -84,7 +86,8 @@ function setPanelExpanded(expanded) {
   panelToggle.setAttribute('aria-label', expanded ? '收合操作' : '展開操作');
   document.querySelector('#panel-content').hidden = !expanded;
 }
-panelToggle.addEventListener('click', () => setPanelExpanded(panelToggle.getAttribute('aria-expanded') !== 'true'));
+const actionPanel=new ActionPanel(panel,setPanelExpanded);
+panelToggle.addEventListener('click', () => { actionPanel.manualToggle();setPanelExpanded(panelToggle.getAttribute('aria-expanded') !== 'true'); });
 
 let scene;
 let models;
@@ -101,6 +104,7 @@ function showStatus(message, error = false) {
 
 async function loadModel(url, label, isDefault = false) {
   const id = ++requestId;
+  actionPanel.cancel();
   showStatus(`載入 ${label}…`);
   try {
     const model = await models.load(url, (event) => {
@@ -110,7 +114,7 @@ async function loadModel(url, label, isDefault = false) {
     if (!model || id !== requestId) return;
     document.querySelector('#model-credit').hidden = !isDefault;
     document.querySelector('#model-credit').open = false;
-    camera.setModel(model.bounds, models.getShoeBounds());
+    camera.setModel(model.bounds, models.getShoePresets());
     cameraMode = 'full';
     document.querySelector('#full-body').disabled = false;
     document.querySelector('#face-closeup').disabled = !model.idle.expression;
@@ -178,7 +182,7 @@ try {
   observer.observe(document.querySelector('#viewport'));
   observer.observe(document.querySelector('.panel'));
   resize();
-  scene.start((delta) => { camera.update(delta); models.update(delta, scene.camera.position); syncGestureButtons(); syncShoeButton();
+  scene.start((delta) => { camera.update(delta); models.update(delta, scene.camera.position); camera.updateStory(models.current?.idle,models); syncGestureButtons(); syncShoeButton();
     const idle = models.current?.idle;
     scene.scene.background = theater.update(idle,delta) ? null : background;
     comics.update(delta, scene.camera, models.getGazeAnchor(), idle?.expression, idle?.gestureTime != null || idle?.reverse?.landing);
@@ -189,22 +193,22 @@ try {
     idleButton.setAttribute('aria-pressed', String(playing));
     idleButton.textContent = playing ? '暫停待機' : '播放待機';
   });
-  const fullView = () => { cameraMode = 'full'; camera.reset(); syncShoeButton(); };
+  const fullView = () => { if(camera.story)camera.story.manual=true;cameraMode = 'full'; camera.reset(); syncShoeButton(); };
   reset.addEventListener('click', fullView);
   document.querySelector('#full-body').addEventListener('click', fullView);
   quickStop.addEventListener('click', () => { models.stopGesture(); syncGestureButtons(); });
   shoeButton.addEventListener('click', () => {
     cameraMode = 'shoe';
-    if (camera.shoeOrbitActive) camera.stopShoeOrbit();
-    else camera.startShoeOrbit();
+    camera.advanceShoeView();
     syncShoeButton();
   });
   for (const button of gestureButtons) button.addEventListener('click', () => {
     if (models.current?.idle.gestureKind === button.dataset.gesture && models.current.idle.gestureTime !== null) models.stopGesture();
     else if (models.playGesture(scene.camera.position, button.dataset.gesture)) {
       cameraMode = 'action';
-      if (button.dataset.gesture==='reverse') camera.showStage(models.getReverseBounds(), true);
-      else camera.reset();
+      actionPanel.start();
+      camera.startStory(button.dataset.gesture);
+      camera.updateStory(models.current.idle,models);
     }
     syncGestureButtons();
   });

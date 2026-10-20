@@ -68,16 +68,25 @@ export class ModelManager {
     return new Box3().setFromCenterAndSize(center,new Vector3(c.width,c.height,c.depth).multiplyScalar(height));
   }
 
-  getShoeBounds() {
+  getShoeBounds(level=0) {
     if (!this.current) return null;
-    const { bounds, idle } = this.current;
-    const height = bounds.max.y - bounds.min.y;
-    const preset = this.config.camera.shoes;
-    const center = bounds.getCenter(new Vector3());
-    // Use the original ankle locations, so character motions do not shake the camera.
-    if (idle.legs) center.copy(idle.legs.L.anchor).add(idle.legs.R.anchor).multiplyScalar(0.5);
-    center.y = bounds.min.y + height * preset.heightFactor / 2;
-    return new Box3().setFromCenterAndSize(center, new Vector3(preset.widthFactor, preset.heightFactor, preset.depthFactor).multiplyScalar(height));
+    const {bounds,idle}=this.current,height=bounds.max.y-bounds.min.y;
+    const preset=this.config.camera.shoes.stages[level];
+    const center=bounds.getCenter(new Vector3());
+    if(idle.legs){
+      if(preset.single)center.copy(idle.legs.R.anchor);
+      else center.copy(idle.legs.L.anchor).add(idle.legs.R.anchor).multiplyScalar(.5);
+    }
+    center.y=bounds.min.y+height*preset.height/2;
+    return new Box3().setFromCenterAndSize(center,new Vector3(preset.width,preset.height,preset.depth).multiplyScalar(height));
+  }
+  getShoePresets(){return this.config.camera.shoes.stages.map((_,i)=>this.getShoeBounds(i));}
+  getDrawingBounds(kind){return this.current?.idle.drawing?.getBounds(kind) || this.current?.bounds;}
+  getReactionBounds(){
+    if(!this.current)return null;
+    const bounds=this.current.bounds,h=bounds.max.y-bounds.min.y,center=bounds.getCenter(new Vector3());
+    center.x-=h*.1;center.y=bounds.min.y+h*.78;
+    return new Box3().setFromCenterAndSize(center,new Vector3(.55,.55,.3).multiplyScalar(h));
   }
 
   stopGesture() { return this.current?.idle.stopGesture(); }
