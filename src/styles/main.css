@@ -46,3 +46,24 @@ button:focus-visible, .button:has(+ input:focus-visible) { outline: 2px solid #c
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
 .setting output.exaggerated { color: #f3cb8c; }
+
+/* Compact bottom drawer; native details retain each section's open state. */
+.panel { width: 360px; max-height: min(38dvh, 360px); padding: 8px 12px; }
+.panel[data-expanded="false"] { width: auto; padding: 0; border: 0; background: transparent; overflow: visible; }
+.panel[data-expanded="false"] #status { display: none; }
+.panel[data-expanded="false"]:has(#status.error) #status { display: block; max-width: 240px; background: #1b1d20; padding: 8px; }
+#panel-toggle { min-width: 44px; padding: 6px; font-size: 20px; }
+.panel-heading { gap: 6px; }
+#panel-content { margin-top: 0; }
+.menu-section, .face-panel { margin: 0; border-top: 1px solid #ffffff20; }
+.menu-section > summary, .face-panel > summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-size: 13px; }
+#quick-stop { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom)); left: calc(72px + env(safe-area-inset-left)); }
+.comic-effects { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.comic-mark { position: absolute; top: 0; left: 0; width: 48px; font-size: 42px; font-weight: 900; color: #f8e6be; text-shadow: 2px 2px #161817, -1px -1px #161817; will-change: transform, opacity; }
+.comic-mark.angry { color: #dc6e58; filter: drop-shadow(2px 2px 0 #171b19); }
+.comic-mark svg { display: block; width: 100%; }
+.comic-mark.proud { width: auto; white-space: nowrap; font-size: 17px; background: #e9e5d3; color: #252b25; padding: 9px 12px; border: 2px solid #404a3c; border-radius: 48% 42% 45% 35%; box-shadow: 2px 3px #16181788; text-shadow: none; }
+.comic-mark.proud::after { content: ''; position: absolute; bottom: -9px; left: 13px; border-width: 9px 8px 0 0; border-style: solid; border-color: #e9e5d3 transparent transparent transparent; }
+@media (prefers-reduced-motion: reduce) { .comic-mark { will-change: auto; } }
+
+.panel[data-expanded="false"] #status[data-loading="true"] { display: block; max-width: 240px; padding: 8px; background: #1b1d20ed; border-radius: 7px; white-space: normal; }

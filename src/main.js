@@ -1,4 +1,5 @@
 import './styles/main.css';
+import { ComicEffects } from './ui/ComicEffects.js';
 import { GazePointer } from './ui/GazePointer.js';
 import { loadingStatus } from './ui/loadingStatus.js';
 import { viewerConfig } from './config/viewerConfig.js';
@@ -18,12 +19,20 @@ const gazeSelect = document.querySelector('#gaze-mode');
 strengthInput.max = String(viewerConfig.face.maxStrength*100);
 const faceHint = document.querySelector('#face-hint');
 let expressionSelection = 'neutral';
+let comics;
+let cameraMode = 'full';
+const quickStop = document.querySelector('#quick-stop');
+strengthInput.value = String(viewerConfig.face.defaultStrength*100);
+function showFace() {
+  if (cameraMode === 'face') return;
+  cameraMode = 'face'; camera.showStage(models.getFaceBounds(), true); syncShoeButton();
+}
 let gazePointer;
 
 function applyExpression() {
   models?.setExpression(expressionSelection, Number(strengthInput.value)/100);
   document.querySelector('#expression-value').value = `${strengthInput.value}%`;
-  document.querySelector('#expression-value').classList.toggle('exaggerated', Number(strengthInput.value)>100);
+  document.querySelector('#expression-value').classList.toggle('exaggerated', Number(strengthInput.value)>50);
   for (const button of expressionButtons) button.setAttribute('aria-pressed', String(button.dataset.expression === expressionSelection));
 }
 
@@ -38,7 +47,7 @@ function syncShoeButton() {
   const active = !!camera?.shoeOrbitActive;
   if (active === previousShoeState) return;
   previousShoeState = active;
-  shoeButton.textContent = active ? '3 · 停止環繞' : '3 · 合乎周禮';
+  shoeButton.textContent = active ? '停止環繞' : '合乎周禮';
   shoeButton.setAttribute('aria-pressed', String(active));
   shoeButton.setAttribute('aria-label', active ? '停止鞋靴環繞' : '合乎周禮：鞋靴視角 360 度環繞');
 }
@@ -50,12 +59,13 @@ function syncGestureButtons() {
   const idle = models?.current?.idle;
   const active = idle?.gestureTime != null ? idle.gestureKind : idle?.reverse?.landing ? 'landing' : '';
   if ((previousGestureState?.endsWith(':reverse') || previousGestureState?.endsWith(':landing')) && !active) camera?.reset();
+  quickStop.hidden = !active || panelToggle.getAttribute('aria-expanded') === 'true';
   const state = `${!!idle?.head}:${active}`;
   if (state === previousGestureState) return;
   previousGestureState = state;
   for (const button of gestureButtons) {
     button.disabled = !idle?.head || (!!active && !(['leek','reverse'].includes(active) && button.dataset.gesture === active));
-    button.textContent = ['leek','reverse'].includes(active) && button.dataset.gesture === active ? (active==='leek'?'2 · 停止甩蔥':'4 · 停止蔥甩蔥') : gestureLabels.get(button) + (active === button.dataset.gesture ? '…' : '');
+    button.textContent = ['leek','reverse'].includes(active) && button.dataset.gesture === active ? (active==='leek'?'停止甩蔥':'停止蔥甩蔥') : gestureLabels.get(button) + (active === button.dataset.gesture ? '…' : '');
     button.setAttribute('aria-pressed', String(active === button.dataset.gesture));
     button.setAttribute('aria-label', button.textContent);
     button.setAttribute('aria-busy', String(active === button.dataset.gesture));
@@ -67,7 +77,8 @@ const panelToggle = document.querySelector('#panel-toggle');
 function setPanelExpanded(expanded) {
   panel.dataset.expanded = String(expanded);
   panelToggle.setAttribute('aria-expanded', String(expanded));
-  panelToggle.textContent = expanded ? '收合操作' : '展開操作';
+  panelToggle.textContent = expanded ? '⌄' : '☰';
+  panelToggle.setAttribute('aria-label', expanded ? '收合操作' : '展開操作');
   document.querySelector('#panel-content').hidden = !expanded;
 }
 panelToggle.addEventListener('click', () => setPanelExpanded(panelToggle.getAttribute('aria-expanded') !== 'true'));
@@ -80,8 +91,9 @@ let observer;
 
 function showStatus(message, error = false) {
   status.textContent = message;
+  status.dataset.loading = String(!error && !message.includes('載入完成'));
   status.classList.toggle('error', error);
-  if (error) setPanelExpanded(true);
+  if (error) { setPanelExpanded(true); document.querySelector('#other-panel').open = true; }
 }
 
 async function loadModel(url, label, isDefault = false) {
@@ -96,6 +108,9 @@ async function loadModel(url, label, isDefault = false) {
     document.querySelector('#model-credit').hidden = !isDefault;
     document.querySelector('#model-credit').open = false;
     camera.setModel(model.bounds, models.getShoeBounds());
+    cameraMode = 'full';
+    document.querySelector('#full-body').disabled = false;
+    document.querySelector('#face-closeup').disabled = !model.idle.expression;
     shoeButton.disabled = false;
     syncShoeButton();
     reset.disabled = false;
@@ -125,6 +140,8 @@ try {
     faceControls.disabled = true;
     for (const button of gestureButtons) button.disabled = true;
   });
+  document.querySelector('#status').dataset.loading = 'true';
+  comics = new ComicEffects(document.querySelector('#viewport'), viewerConfig.face.comic);
   camera = new CameraController(scene.camera, scene.renderer.domElement, viewerConfig);
   models = new ModelManager(scene.scene, viewerConfig);
   gazePointer = new GazePointer(scene.renderer.domElement, scene.camera, viewerConfig.gaze,
@@ -132,12 +149,12 @@ try {
     (point) => models.setGazePoint(point));
   for (const button of expressionButtons) button.addEventListener('click', () => {
     expressionSelection = button.dataset.expression;
-    applyExpression();
+    applyExpression(); showFace();
   });
-  strengthInput.addEventListener('input', applyExpression);
-  gazeSelect.addEventListener('change', () => { models.setGazeMode(gazeSelect.value); updateFaceHint(); });
+  strengthInput.addEventListener('input', () => { applyExpression(); showFace(); });
+  gazeSelect.addEventListener('change', () => { models.setGazeMode(gazeSelect.value); updateFaceHint(); showFace(); });
   document.querySelector('#face-closeup').addEventListener('click', () => {
-    camera.showStage(models.getFaceBounds());
+    cameraMode = 'full'; showFace();
     syncShoeButton();
   });
   const resize = () => {
@@ -156,22 +173,33 @@ try {
   observer.observe(document.querySelector('#viewport'));
   observer.observe(document.querySelector('.panel'));
   resize();
-  scene.start((delta) => { camera.update(delta); models.update(delta, scene.camera.position); syncGestureButtons(); syncShoeButton(); });
+  scene.start((delta) => { camera.update(delta); models.update(delta, scene.camera.position); syncGestureButtons(); syncShoeButton();
+    const idle = models.current?.idle;
+    comics.update(delta, scene.camera, models.getGazeAnchor(), idle?.expression, idle?.gestureTime != null || idle?.reverse?.landing);
+  });
   idleButton.addEventListener('click', () => {
     const playing = idleButton.getAttribute('aria-pressed') !== 'true';
     models.setIdlePlaying(playing);
     idleButton.setAttribute('aria-pressed', String(playing));
     idleButton.textContent = playing ? '暫停待機' : '播放待機';
   });
-  reset.addEventListener('click', () => { camera.reset(); syncShoeButton(); });
+  const fullView = () => { cameraMode = 'full'; camera.reset(); syncShoeButton(); };
+  reset.addEventListener('click', fullView);
+  document.querySelector('#full-body').addEventListener('click', fullView);
+  quickStop.addEventListener('click', () => { models.stopGesture(); syncGestureButtons(); });
   shoeButton.addEventListener('click', () => {
+    cameraMode = 'shoe';
     if (camera.shoeOrbitActive) camera.stopShoeOrbit();
     else camera.startShoeOrbit();
     syncShoeButton();
   });
   for (const button of gestureButtons) button.addEventListener('click', () => {
     if (['leek','reverse'].includes(button.dataset.gesture) && models.current?.idle.gestureKind === button.dataset.gesture && models.current.idle.gestureTime !== null) models.stopGesture();
-    else if (models.playGesture(scene.camera.position, button.dataset.gesture) && button.dataset.gesture==='reverse') camera.showStage(models.getReverseBounds());
+    else if (models.playGesture(scene.camera.position, button.dataset.gesture)) {
+      cameraMode = 'action';
+      if (button.dataset.gesture==='reverse') camera.showStage(models.getReverseBounds(), true);
+      else camera.reset();
+    }
     syncGestureButtons();
   });
   fileInput.addEventListener('change', async () => {
@@ -197,6 +225,7 @@ window.addEventListener('pagehide', (event) => {
   ++requestId;
   observer?.disconnect();
   gazePointer?.dispose();
+  comics?.dispose();
   camera?.dispose();
   models?.dispose();
   scene?.dispose();
