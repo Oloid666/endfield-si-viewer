@@ -32,18 +32,22 @@ export class GazeController {
   update(delta, cameraPosition) {
     const c = this.config, a = this.angles;
     const target = this.mode === 'point' ? this.point || cameraPosition : this.mode === 'camera' ? cameraPosition : null;
-    let yaw = 0, pitch = 0;
+    let yaw = 0, pitch = 0, headYawLimit = c.headYawLimit;
     if (target) {
       this.head.getWorldPosition(this.origin);
       this.direction.subVectors(target, this.origin);
       if (this.direction.lengthSq() > 1e-10) {
-        yaw = MathUtils.clamp(Math.atan2(this.direction.x, this.direction.z), -c.headYawLimit-c.eyeYawLimit, c.headYawLimit+c.eyeYawLimit);
+        if(this.mode==='camera'&&this.direction.z<0)headYawLimit=c.rearHeadYawLimit||c.headYawLimit;
+        yaw = MathUtils.clamp(Math.atan2(this.direction.x, this.direction.z), -headYawLimit-c.eyeYawLimit, headYawLimit+c.eyeYawLimit);
+        // Keep the chosen shoulder through the +/-PI seam behind her head.
+        if(this.direction.z<0&&Math.abs(this.direction.x)<Math.abs(this.direction.z)*.2&&Math.abs(a.headYaw)>.1)
+          yaw=Math.sign(a.headYaw)*(headYawLimit+c.eyeYawLimit);
         pitch = MathUtils.clamp(-Math.atan2(this.direction.y, Math.hypot(this.direction.x, this.direction.z)), -c.headPitchLimit-c.eyePitchLimit, c.headPitchLimit+c.eyePitchLimit);
       }
     }
     const headAlpha = 1 - Math.exp(-Math.max(0, delta) * c.headResponse);
     const eyeAlpha = 1 - Math.exp(-Math.max(0, delta) * c.eyeResponse);
-    a.headYaw = MathUtils.lerp(a.headYaw, MathUtils.clamp(yaw*c.headShare, -c.headYawLimit, c.headYawLimit), headAlpha);
+    a.headYaw = MathUtils.lerp(a.headYaw, MathUtils.clamp(yaw*c.headShare, -headYawLimit, headYawLimit), headAlpha);
     a.headPitch = MathUtils.lerp(a.headPitch, MathUtils.clamp(pitch*c.headShare, -c.headPitchLimit, c.headPitchLimit), headAlpha);
     a.eyeYaw = MathUtils.lerp(a.eyeYaw, MathUtils.clamp(yaw-a.headYaw, -c.eyeYawLimit, c.eyeYawLimit), eyeAlpha);
     a.eyePitch = MathUtils.lerp(a.eyePitch, MathUtils.clamp(pitch-a.headPitch, -c.eyePitchLimit, c.eyePitchLimit), eyeAlpha);

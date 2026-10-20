@@ -32,7 +32,7 @@ export class ModelManager {
       group.updateMatrixWorld(true);
       this.clear();
       this.current = { group, gltf, bounds: new Box3().setFromObject(group, true) };
-      this.current.idle = new IdleController(gltf, this.config.idle, this.current.bounds, actor, this.config.face, this.config.gaze);
+      this.current.idle = new IdleController(gltf, this.config.idle, this.current.bounds, actor, this.config.face, this.config.gaze, this.config.interactions.photography);
       this.scene.add(group);
       return this.current;
     } catch (error) { this.release(group); throw error; }

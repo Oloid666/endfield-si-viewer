@@ -1,3 +1,16 @@
+# 最新驗證：玩家選擇、四區文案與攝影互動（2026-10-20）
+
+- `npm ci --cache /tmp/si-npm-cache --no-audit --no-fund` 成功；未新增產品依賴。
+- `npm test`：40 項通過。新增選擇點精準停住／長時間不自動繼續、兩條真實分支、取消清理、四圈大風車、固定龍捲風池與資源釋放、四區邊界／A/B 獨立輪替、驕傲被駁回後收回笑容、近看停留／移開重設／單次觸發、後仰雙腳著地、半圈鏡頭與背後接縫方向限制。
+- `VITE_BASE_PATH=/endfield-si-viewer/ npm run build` 成功。Three.js 主 bundle 的既有 500 kB 提示仍在，不影響建置。
+- Chromium／SwiftShader，以正式 Build 的 Repository 子路徑預覽測試真實 GLB，390×844 觸控尺寸與 844×390 橫式：新按鈕名稱、三種高強度 UI、鞋子四段、轉背、臉部停留吐槽及移開取消、動作自動收合／還原、選擇停等、救援與加碼、完整落款、Escape 取消均通過，無未捕捉 JavaScript 錯誤。
+- 開發測試曾連到殘留 Vite dev server，出現 Outdated Optimize Dep 504；改用獨立的正式 Build preview，避免舊快取與 HMR 影響驗證。
+- 原始 GLB SHA-256：`34fd795c693433e1ff1532c6cb7e4e801c3fb152d179e81ee1ab708c16b4c1e1`，保持不變。
+- 下方為各輪歷史驗證，舊按鈕名稱、時長及測試數量以本節及現行 README 為準。
+- **尚未測試：實體 iPhone Safari、硬體 FPS、長時間熱負載與 VoiceOver。** 桌面 Chromium 的手機尺寸測試不代表 iPhone 真機效能。
+
+---
+
 # Phase 1 測試紀錄
 
 測試環境：2026-10-19，Node.js 24.19.0、npm 11.9.0，Linux Chromium（headless、SwiftShader WebGL）。以暫時安裝於 /tmp 的 Playwright 驅動，未增加產品依賴。測試模型為自行產生的 GLB 三角形，含偏移節點與基本材質，沒有使用原作資源。
