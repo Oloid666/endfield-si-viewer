@@ -6,7 +6,7 @@ export class CameraController {
     this.camera = camera;
     this.config = config;
     this.controls = new OrbitControls(camera, element);
-    this.onInteraction = () => this.stopShoeOrbit();
+    this.onInteraction = () => { this.transition = null; this.stopShoeOrbit(); };
     this.controls.addEventListener('start', this.onInteraction);
     Object.assign(this.controls, {
       enableDamping: true,
@@ -23,6 +23,7 @@ export class CameraController {
   }
 
   frame(bounds, preserveView = false) {
+    this.transition = null;
     const direction = preserveView ? this.camera.position.clone().sub(this.controls.target).normalize() : new Vector3(0, 0, 1);
     const zoom = preserveView && this.fitDistance ? this.camera.position.distanceTo(this.controls.target) / this.fitDistance : 1;
     const pan = preserveView && this.bounds ? this.controls.target.clone().sub(this.bounds.getCenter(new Vector3())) : new Vector3();
@@ -67,7 +68,15 @@ export class CameraController {
     this.frame(bounds);
   }
 
-  showStage(bounds) { if(bounds){this.stopShoeOrbit();this.frame(bounds);} }
+  showStage(bounds, smooth = false) {
+    if (!bounds) return;
+    const startPosition = this.camera.position.clone(), startTarget = this.controls.target.clone();
+    this.stopShoeOrbit(); this.frame(bounds);
+    if (smooth) {
+      this.transition = { time: 0, startPosition, startTarget, endPosition: this.camera.position.clone(), endTarget: this.controls.target.clone() };
+      this.camera.position.copy(startPosition); this.controls.target.copy(startTarget);
+    }
+  }
 
   startShoeOrbit() {
     if (!this.shoeBounds) return false;
@@ -86,6 +95,16 @@ export class CameraController {
     if (this.modelBounds || this.bounds) this.frame(this.modelBounds || this.bounds);
   }
   resize() { if (this.bounds) this.frame(this.bounds, true); }
-  update(delta) { this.controls.update(delta); }
+  update(delta) {
+    if (this.transition) {
+      const t = this.transition;
+      t.time += delta;
+      const weight = MathUtils.smoothstep(t.time, 0, .55);
+      this.camera.position.lerpVectors(t.startPosition, t.endPosition, weight);
+      this.controls.target.lerpVectors(t.startTarget, t.endTarget, weight);
+      if (weight === 1) this.transition = null;
+    }
+    this.controls.update(delta);
+  }
   dispose() { this.stopShoeOrbit(); this.controls.removeEventListener('start', this.onInteraction); this.controls.dispose(); }
 }

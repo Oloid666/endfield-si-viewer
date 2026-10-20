@@ -12,7 +12,14 @@ export const viewerConfig = { background: 0x242629,
      face: { width: 0.24, height: 0.26, depth: 0.2, headOffset: 0.025 } },
   controls: { dampingFactor: 0.08, minPolarAngle: 0.08, maxPolarAngle: Math.PI - 0.08, minDistanceFactor: 0.15, maxDistanceFactor: 8 },
   face: {
-    response: 10, defaultStrength: 0.8, maxStrength: 2,
+    response: 10, defaultStrength: 0.5, maxStrength: 2,
+    compressedEnd: 0.5,
+    comic: { response: 9, maxScale: 1.8 },
+    dramatic: {
+      angry: { lid: 0.52, headPitch: -0.13, headYaw: -0.16, headRoll: -0.14, browLeftInner: -0.0024, browRightInner: -0.0018, mouthLeft: -0.0014 },
+      proud: { lid: 0.46, headPitch: -0.11, headYaw: 0.09, headRoll: 0.26, mouthRight: 0.0022, browLeftInner: 0.0028 },
+      surprised: { lid: -0.23, headPitch: -0.14, headRoll: 0.12, browLeftInner: 0.0032, browRightInner: 0.0032 },
+    },
     presets: {
       neutral: {},
       angry: { browLeftInner: -0.0018, browLeftOuter: 0.0001, browRightInner: -0.0016, browRightOuter: 0.0001, mouthLeft: -0.0007, mouthRight: -0.0007, lid: 0.22 },

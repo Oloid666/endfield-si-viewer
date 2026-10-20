@@ -156,3 +156,10 @@ Build 唯一提示是主要 JS chunk 約 597 kB（gzip 約 153 kB），包含 Th
 - 實際 Si 右靴 934 個主要 skin-weighted vertices 的平均抬升：100% 為人物高度 8.507%，200% 為 12.008%；支撐腳位置誤差低於人物高度的 0.00001。原始 GLB 不變。
 - 正式 Repository Base Path build 的手機尺寸 UI：滑桿最大值 200、200% 顯示與暖色提示、看鏡頭模式、臉部近看、傲嬌播放互斥與取消均通過，無未捕捉 page error。
 - 不新增怒符、選單重排或其他鏡頭段落；此輪僅實作已指定的 200% 表情、歪頭與大幅跺腳。iPhone Safari 真機效能仍待實測。
+
+## Comic expression / compact menu revision
+
+- `npm test`: 20 passing tests, including the former 0–200% curve compressed into 0–50%, new bounded expression endpoints, zero-intensity restoration and weighted stomp regression.
+- Repository-subpath production build: `VITE_BASE_PATH=/endfield-si-viewer/ npm run build` passed.
+- Chromium mobile viewport 390×844 (SwiftShader): three expressions × 0/50/100/150/200 intensity, independent drawer sections, action suppression, collapsed quick-stop, landscape 844×390, no uncaught JavaScript errors. Browser harness is an external Playwright verification script; Playwright is not a product dependency.
+- Physical iPhone Safari, GPU performance, and VoiceOver remain untested.

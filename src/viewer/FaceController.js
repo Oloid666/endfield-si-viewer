@@ -21,11 +21,17 @@ export class FaceController {
     this.strength = MathUtils.clamp(strength, 0, this.config.maxStrength);
     const preset = this.config.presets[selection];
     const exaggerated = this.config.exaggerated[selection];
-    const baseWeight = Math.min(this.strength, 1);
-    this.boostTarget = MathUtils.smoothstep(this.strength, 1, this.config.maxStrength);
+    // The former 0–200% curve now occupies 0–50%. Above it,
+    // bounded new endpoints accompany the separately drawn comic effects.
+    const mapped = Math.min(this.strength / this.config.compressedEnd, 1) * 2;
+    const baseWeight = Math.min(mapped, 1);
+    const oldBoost = MathUtils.smoothstep(mapped, 1, 2);
+    this.boostTarget = MathUtils.smoothstep(this.strength, this.config.compressedEnd, this.config.maxStrength);
+    const dramatic = this.config.dramatic[selection] || exaggerated;
     for (const key of KEYS) {
       const base = preset[key] || 0;
-      this.target[key] = MathUtils.lerp(base*baseWeight, exaggerated[key] ?? base, this.boostTarget);
+      const compressed = MathUtils.lerp(base*baseWeight, exaggerated[key] ?? base, oldBoost);
+      this.target[key] = MathUtils.lerp(compressed, dramatic[key] ?? exaggerated[key] ?? base, this.boostTarget);
     }
     return true;
   }

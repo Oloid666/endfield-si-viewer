@@ -315,18 +315,18 @@ test('camera gaze follows the viewer and action head motion keeps priority', () 
 });
 
 
-test('200% blends to authored exaggerated endpoints, not doubled face offsets', () => {
+test('former 0–200% curve is compressed into 0–50%, then bounded dramatic endpoints', () => {
   const face=new FaceController(viewerConfig.face);
   for(const preset of ['angry','proud','shy','surprised']){
-    face.setExpression(preset,1);face.update(4);
+    face.setExpression(preset,.25);face.update(4);
     assert(Math.abs(face.values.headRoll)<1e-8);
     const ordinary={...face.values};
-    face.setExpression(preset,2);face.update(4);
+    face.setExpression(preset,.5);face.update(4);
     const endpoint=viewerConfig.face.exaggerated[preset];
     for(const [key,value] of Object.entries(endpoint))assert(Math.abs(face.values[key]-value)<1e-8);
     assert(Math.abs(face.values.headRoll)>.05);
     assert(['browLeftInner','browLeftOuter','mouthLeft','mouthRight','lid'].some(key=>Math.abs(face.values[key]-ordinary[key]*2)>1e-5));
-    face.setExpression(preset,1.5);face.update(4);
+    face.setExpression(preset,.375);face.update(4);
     assert(Math.abs(face.values.headRoll-endpoint.headRoll*.5)<1e-8);
   }
   face.setExpression('neutral',2);face.update(4);assert(Object.values(face.values).every(v=>Math.abs(v)<1e-8));
@@ -334,7 +334,7 @@ test('200% blends to authored exaggerated endpoints, not doubled face offsets', 
 
 test('200% face adds head acting and an enlarged stomp while feet and grip remain grounded', () => {
   const results=[];
-  for(const strength of [1,2]){
+  for(const strength of [.5,2]){
     const idle=fixture();idle.expression.setExpression('shy',strength);idle.update(4);
     const selectedHead=idle.head.bone.quaternion.toArray();
     const wristBase=idle.arms.R.end.getWorldPosition(new Vector3());
@@ -355,4 +355,17 @@ test('200% face adds head acting and an enlarged stomp while feet and grip remai
     assert(idle.arms.R.end.getWorldPosition(new Vector3()).distanceTo(wristBase)<1e-5);
   }
   assert(results[1]-results[0]>.03);
+});
+
+
+test('three comic expressions retain the old 50% endpoint, reach distinct new endpoints and reset at zero', () => {
+  const face = new FaceController(viewerConfig.face);
+  for (const selection of ['angry', 'proud', 'surprised']) {
+    face.setExpression(selection, .5); face.update(4);
+    for (const [key, value] of Object.entries(viewerConfig.face.exaggerated[selection])) assert(Math.abs(face.values[key]-value)<1e-8);
+    face.setExpression(selection, 2); face.update(4);
+    for (const [key, value] of Object.entries(viewerConfig.face.dramatic[selection])) assert(Math.abs(face.values[key]-value)<1e-8);
+    face.setExpression(selection, 0); face.update(4);
+    assert(Object.values(face.values).every(value=>Math.abs(value)<1e-8));
+  }
 });
