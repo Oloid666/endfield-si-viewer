@@ -10,7 +10,9 @@
   <body>
     <main id="app">
       <div id="viewport" aria-label="3D 模型展示區"></div>
-      <header><p>ARKNIGHTS: ENDFIELD</p><h1>祀 <span>Si</span></h1></header>
+      <nav class="zone-nav" aria-label="選擇區域"><button data-zone="si" aria-pressed="true">小蔥區</button><button data-zone="zhuang" aria-pressed="false">大蔥區</button><button data-zone="game" aria-pressed="false">遊戲區</button></nav>
+      <header><p>ARKNIGHTS: ENDFIELD</p><h1><b id="character-name">祀</b> <span id="character-subtitle">Si · 小蔥區</span></h1></header>
+      <section id="game-root" aria-label="節奏甩蔥遊戲" hidden></section>
       <section id="load-panel" aria-label="模型載入">
         <h2 id="load-title">正在載入祀</h2>
         <progress id="load-progress" aria-label="模型下載進度"></progress>
@@ -49,7 +51,7 @@
           </fieldset>
           <p class="hint" id="face-hint">動作播放時優先使用動作表情；重設視角可回到全身。</p>
         </details>
-        <details class="menu-section"><summary>2　原創角色動作</summary>
+        <details class="menu-section" id="action-section"><summary>2　原創角色動作</summary>
           <p class="hint">水墨短劇演一次回待機；播放中再按可停止。</p>
           <div class="actions"><button id="gesture" data-gesture="tsundere" disabled>釘宮祀萌</button><button data-gesture="leek" disabled>源祀技藝</button><button data-gesture="reverse" disabled>蔥末地</button></div>
         </details>
@@ -59,7 +61,7 @@
         <details class="menu-section" id="other-panel"><summary>4　其他</summary>
           <div class="actions"><label class="button" for="model-file">上傳本機 GLB</label><input id="model-file" type="file" accept=".glb" /><button id="idle-toggle" aria-pressed="false" disabled>待機</button></div>
         <p class="hint">拖曳旋轉 · 雙指縮放／平移<br />電腦：左鍵旋轉 · 滾輪縮放 · 右鍵平移</p>
-        <details id="model-credit" class="credit" hidden><summary>模型來源與授權</summary><p><a href="https://sketchfab.com/3d-models/si-arknights-endfield-304e5f23db204cbd834b44138ca570d7" target="_blank" rel="noopener noreferrer">Si / Arknights Endfield</a> · <a href="https://sketchfab.com/Abcxyz51" target="_blank" rel="noopener noreferrer">Abcxyz51</a><br /><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · Sketchfab GLB 轉檔版本，原模型檔未改動；本站加入骨骼待機與原創互動</p></details>
+        <details id="model-credit" class="credit" hidden><summary>模型來源與授權</summary><p><a id="source-model-link" href="https://sketchfab.com/3d-models/si-arknights-endfield-304e5f23db204cbd834b44138ca570d7" target="_blank" rel="noopener noreferrer">Si / Arknights Endfield</a> · <a href="https://sketchfab.com/Abcxyz51" target="_blank" rel="noopener noreferrer">Abcxyz51</a><br /><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · <span id="source-description">原模型檔未改動；本站加入骨骼待機與原創互動</span></p></details>
         </details>
         </div>
       </section>

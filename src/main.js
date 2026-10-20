@@ -10,6 +10,8 @@ import { ModelManager } from './viewer/ModelManager.js';
 import { CameraController } from './viewer/CameraController.js';
 import { ViewerDialogue } from './ui/ViewerDialogue.js';
 import { PhotographyController } from './viewer/PhotographyController.js';
+import { RhythmGame } from './game/RhythmGame.js';
+import { GameStage } from './game/GameStage.js';
 
 const status = document.querySelector('#status');
 const fileInput = document.querySelector('#model-file');
@@ -33,6 +35,12 @@ let background;
 let cameraMode = 'full';
 let dialogue;
 let photography;
+let game;
+let gameStage;
+let zone='si';
+let lastViewerZone='si';
+let graphicsLost=false;
+let zoneHashListener;
 const quickStop = document.querySelector('#quick-stop');
 strengthInput.value = String(viewerConfig.face.defaultStrength*100);
 function showFace() {
@@ -110,14 +118,16 @@ function showStatus(message, error = false) {
   if (error) { setPanelExpanded(true); document.querySelector('#other-panel').open = true; }
 }
 
-async function loadModel(url, label, isDefault = false) {
+async function loadModel(url, label, isDefault = false, characterKey='si') {
   const id = ++requestId;
   actionPanel.cancel();
   dialogue?.cancel();photography?.reset();
   showStatus(`載入 ${label}…`);
-  loadPanel.hidden=false;loadTitle.textContent=isDefault?'正在下載祀':`正在載入 ${label}`;
+  const character=isDefault?viewerConfig.characters[characterKey]:null;
+  game?.setReady(false);
+  loadPanel.hidden=false;loadTitle.textContent=character?`正在下載${character.name}`:`正在載入 ${label}`;
   loadProgress.removeAttribute('value');loadProgress.hidden=false;
-  const asset=isDefault&&viewerConfig.modelTransfer.asset?.path===viewerConfig.modelPath?viewerConfig.modelTransfer.asset:null;
+  const asset=character?(viewerConfig.modelTransfer.assets[character.path]||(characterKey==='si'?viewerConfig.modelTransfer.asset:null)):null;
   const zipped=asset&&typeof DecompressionStream==='function';
   loadDetail.textContent=asset?`首次下載約 ${((zipped?asset.gzipBytes:asset.bytes)/1e6).toFixed(2)} MB；成功後會快取在此瀏覽器。`:'正在讀取模型與貼圖…';
   try {
@@ -127,7 +137,7 @@ async function loadModel(url, label, isDefault = false) {
       const loaded=(event.loaded/1e6).toFixed(2),total=event.total>0?(event.total/1e6).toFixed(2):null;
       loadDetail.textContent=total?`已下載 ${loaded} / ${total} MB`:`已下載 ${loaded} MB`;
       if(event.total>0){loadProgress.max=100;loadProgress.value=Math.min(100,event.loaded/event.total*100);}
-    },{asset,compressedUrl:zipped?`${import.meta.env.BASE_URL}${asset.gzipPath}`:null,onState:state=>{
+    },{asset,viewNodes:character?.viewNodes,characterId:character?characterKey:null,compressedUrl:zipped?`${import.meta.env.BASE_URL}${asset.gzipPath}`:null,onState:state=>{
       if(id!==requestId)return;
       const messages={retry:'連線中斷，正在重新下載…',cached:'正在讀取本機快取…',decompress:'正在解壓縮模型…',parse:'正在處理模型與貼圖…'};
       loadTitle.textContent=messages[state]||'正在載入模型…';showStatus(loadTitle.textContent);
@@ -136,11 +146,16 @@ async function loadModel(url, label, isDefault = false) {
     if (!model || id !== requestId) return;
     document.querySelector('#model-credit').hidden = !isDefault;
     document.querySelector('#model-credit').open = false;
+    if(character){
+      document.querySelector('#source-model-link').href=character.source;document.querySelector('#source-model-link').textContent=character.sourceName;
+      document.querySelector('#source-description').textContent=characterKey==='si'?'原模型檔未改動；本站加入骨骼待機與原創互動':'原模型檔未改動；本區提供模型觀看與鏡頭操作';
+      document.querySelector('#character-name').textContent=character.name;document.querySelector('#character-subtitle').textContent=character.subtitle;
+    }
     camera.setModel(model.bounds, models.getShoePresets());
     cameraMode = 'full';
     document.querySelector('#full-body').disabled = false;
     document.querySelector('#back-view').disabled = false;
-    document.querySelector('#face-closeup').disabled = !model.idle.expression;
+    document.querySelector('#face-closeup').disabled = !models.getGazeAnchor();
     shoeButton.disabled = false;
     syncShoeButton();
     reset.disabled = false;
@@ -150,10 +165,11 @@ async function loadModel(url, label, isDefault = false) {
     models.setGazeMode(gazeSelect.value);
     updateFaceHint();
     syncGestureButtons();
-    idleButton.textContent = model.idle.supported ? '暫停待機' : '模型不支援待機';
+    idleButton.textContent = model.idle.supported ? '暫停待機' : '靜態模型展示';
     idleButton.setAttribute('aria-pressed', String(model.idle.supported));
-    showStatus(isDefault ? '祀 · 載入完成' : `${label} · 載入完成`);
+    showStatus(character ? `${character.name} · 載入完成` : `${label} · 載入完成`);
     loadPanel.hidden=true;
+    game?.setReady(model.characterId==='si'&&!!model.idle.leek);
   } catch (error) {
     if (id !== requestId) return;
     console.error('Model load failed:', error);
@@ -166,7 +182,11 @@ async function loadModel(url, label, isDefault = false) {
 
 try {
   scene = new SceneManager(document.querySelector('#viewport'), viewerConfig, () => {
+    graphicsLost=true;game?.pause();
     showStatus('WebGL 繪圖連線已中斷，請重新整理頁面。', true);
+    loadPanel.hidden=false;loadTitle.textContent='3D 繪圖已中斷';loadProgress.hidden=true;loadDetail.textContent='請重新整理頁面，已下載的模型可從快取讀取。';
+    document.querySelector('#retry-model').textContent='重新整理頁面';
+    document.querySelectorAll('.zone-nav button,#full-body,#face-closeup,#back-view').forEach(button=>{button.disabled=true;});
     fileInput.disabled = true;
     reset.disabled = true;
     idleButton.disabled = true;
@@ -182,10 +202,12 @@ try {
   photography = new PhotographyController(viewerConfig.interactions.photography,line=>dialogue.cameraLine(line));
   camera = new CameraController(scene.camera, scene.renderer.domElement, viewerConfig);
   models = new ModelManager(scene.scene, viewerConfig);
+  gameStage=new GameStage(models,viewerConfig.game);
   gazePointer = new GazePointer(scene.renderer.domElement, scene.camera, viewerConfig.gaze,
     () => gazeSelect.value === 'point' ? models.getGazeAnchor() : null,
     (point) => models.setGazePoint(point));
   for (const button of expressionButtons) button.addEventListener('click', () => {
+    if(expressionSelection!==button.dataset.expression){strengthInput.value='0';dialogue.cancel();}
     expressionSelection = button.dataset.expression;
     applyExpression(); showFace();
     dialogue.expression(expressionSelection,Number(strengthInput.value)/100);
@@ -202,25 +224,66 @@ try {
     const viewport = document.querySelector('#viewport').getBoundingClientRect();
     const header = document.querySelector('header').getBoundingClientRect();
     const panel = document.querySelector('.panel').getBoundingClientRect();
-    if (viewport.width > viewport.height && panel.right < viewport.width * 0.65) {
+    const nav=document.querySelector('.zone-nav').getBoundingClientRect();
+    if(zone==='game'){
+      const hud=document.querySelector('.game-hud')?.getBoundingClientRect();
+      const pads=document.querySelector('#game-chart')?.getBoundingClientRect();
+      if(viewport.width>viewport.height)camera.setViewportInsets(viewport.width,viewport.height,nav.bottom+10,16,0,viewport.width*.45);
+      else camera.setViewportInsets(viewport.width,viewport.height,Math.max(nav.bottom,hud?.bottom||0)+30,pads?.height?viewport.bottom-pads.top:90);
+    }else if (viewport.width > viewport.height && panel.right < viewport.width * 0.65) {
       camera.setViewportInsets(viewport.width, viewport.height, 0, 0, Math.max(header.right, panel.right));
     } else {
-      camera.setViewportInsets(viewport.width, viewport.height, header.bottom, viewport.bottom - panel.top);
+      camera.setViewportInsets(viewport.width, viewport.height, Math.max(header.bottom,nav.bottom), viewport.bottom - panel.top);
     }
     camera.resize();
   };
   observer = new ResizeObserver(resize);
   observer.observe(document.querySelector('#viewport'));
   observer.observe(document.querySelector('.panel'));
+  async function selectZone(next){
+    if(graphicsLost||!['si','zhuang','game'].includes(next))return;
+    if(game?.active)game.leave();
+    ++requestId;models.cancelLoad();models.stopGesture();actionPanel.cancel();dialogue.cancel();photography.reset();camera.story=null;
+    zone=next;if(next!=='game')lastViewerZone=next;
+    document.querySelector('#app').dataset.zone=next;
+    history.replaceState(null,'',`#${next}`);
+    for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.setAttribute('aria-pressed',String(button.dataset.zone===next));
+    document.querySelector('#face-panel').hidden=next==='zhuang';document.querySelector('#action-section').hidden=next==='zhuang';
+    camera.controls.enabled=next!=='game';setPanelExpanded(false);cameraMode=next==='game'?'game':'full';
+    if(next==='game')game.enter();
+    const key=next==='zhuang'?'zhuang':'si',character=viewerConfig.characters[key];
+    resize();
+    if(models.current?.characterId===key){
+      loadPanel.hidden=true;camera.reset();game.setReady(key==='si'&&!!models.current.idle.leek);showStatus(`${character.name} · 載入完成`);
+    }else await loadModel(`${import.meta.env.BASE_URL}${character.path}`,character.name,true,key);
+  }
+  game=new RhythmGame(document.querySelector('#game-root'),viewerConfig.game,{
+    exit:()=>selectZone(lastViewerZone),
+    start:()=>{const ok=gameStage.start(scene.camera.position);if(ok){camera.showStage(models.current.bounds);resize();}return ok;},
+    frame:(time,phase)=>{gameStage.prepare(time,phase);if(phase!==game.lastShot){game.lastShot=phase;camera.showStage(phase==='reverse'?models.getReverseBounds():models.current.bounds,true);}},
+    stop:()=>{gameStage.stop();game.lastShot=null;},
+    hit:(side,result,time)=>gameStage.hit(side,result,time),
+  });
+  for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.addEventListener('click',()=>selectZone(button.dataset.zone));
+  zoneHashListener=()=>{const next=location.hash.slice(1);if(next!==zone&&['si','zhuang','game'].includes(next))selectZone(next);};
+  window.addEventListener('hashchange',zoneHashListener);
+  observer.observe(document.querySelector('#game-chart'));
   resize();
-  scene.start((delta) => { camera.update(delta);
+  scene.start((delta) => { game.update();camera.update(delta);
     const idle = models.current?.idle;
-    const busy=!!(idle?.gestureTime!=null||idle?.rescueTime!=null||idle?.reverse?.landing||idle?.transition);
+    if(zone==='game'&&['idle','results'].includes(game.state)){
+      const ready=models.current?.characterId==='si'&&!!idle?.leek&&!idle.transition&&!idle.reverse?.landing;
+      if(game.ready!==ready)game.setReady(ready);
+    }
+    const busy=zone==='game'||!!(idle?.gestureTime!=null||idle?.rescueTime!=null||idle?.reverse?.landing||idle?.transition);
     if(idle)idle.photoLean=photography.update(delta,scene.camera,camera.controls.target,models.getGazeAnchor(),busy,!!camera.transition||camera.interacting);
     if(!photography.close&&dialogue.session?.camera)dialogue.cancel();
     if(idle)idle.dialogueReaction=dialogue.update(delta,busy);
-    models.update(delta,scene.camera.position);camera.updateStory(idle,models);syncGestureButtons();syncShoeButton();
-    scene.scene.background = theater.update(idle,delta) ? null : background;
+    if(!(zone==='game'&&game.state==='paused')){
+      models.update(delta,scene.camera.position);if(gameStage.active)gameStage.afterUpdate(delta,game.engine.elapsed,game.engine.phase);
+    }
+    if(zone!=='game')camera.updateStory(idle,models);syncGestureButtons();syncShoeButton();
+    scene.scene.background = theater.update(zone==='game'?null:idle,delta) ? null : background;
     comics.update(delta, scene.camera, models.getGazeAnchor(), idle?.expression, busy);
   });
   idleButton.addEventListener('click', () => {
@@ -259,8 +322,8 @@ try {
     try { await loadModel(url, file.name); }
     finally { URL.revokeObjectURL(url); }
   });
-  document.querySelector('#retry-model').addEventListener('click',()=>loadModel(`${import.meta.env.BASE_URL}${viewerConfig.modelPath}`,'si.glb',true));
-  loadModel(`${import.meta.env.BASE_URL}${viewerConfig.modelPath}`, 'si.glb', true);
+  document.querySelector('#retry-model').addEventListener('click',()=>{if(graphicsLost){location.reload();return;}const key=zone==='zhuang'?'zhuang':'si',c=viewerConfig.characters[key];loadModel(`${import.meta.env.BASE_URL}${c.path}`,c.name,true,key);});
+  selectZone(['si','zhuang','game'].includes(location.hash.slice(1))?location.hash.slice(1):'si');
 } catch (error) {
   console.error(error);
   showStatus('無法啟動 WebGL 3D 顯示。請使用支援 WebGL 的 Safari／Chrome／Edge，並確認硬體加速可用。', true);
@@ -275,6 +338,8 @@ try {
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   ++requestId;
+  game?.dispose();
+  window.removeEventListener('hashchange',zoneHashListener);
   observer?.disconnect();
   gazePointer?.dispose();
   comics?.dispose();

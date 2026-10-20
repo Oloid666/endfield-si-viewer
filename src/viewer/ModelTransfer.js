@@ -100,7 +100,10 @@ export async function transferGLB(url, progress, options = {}) {
         // Cache a copy of the verified original, independent of CDN expiry.
         await optionalCache(cache.put(key.href,new Response(buffer,{headers:{'Content-Type':'model/gltf-binary'}})));
         const keys=await optionalCache(cache.keys());
-        if(keys)for(const request of keys)if(request.url!==key.href)void cache.delete(request).catch(()=>{});
+        if(keys)for(const request of keys){
+          const previous=new URL(request.url);
+          if(previous.origin===key.origin&&previous.pathname===key.pathname&&request.url!==key.href)void cache.delete(request).catch(()=>{});
+        }
       }
       onState?.('parse');return buffer;
     }catch(error){

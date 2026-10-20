@@ -72,3 +72,15 @@ test('native fetch retains the Window receiver required by browsers',async()=>{
   try{const result=await transferGLB(url,null,tiny);assert(Buffer.from(result).equals(raw));}
   finally{globalThis.fetch=original;}
 });
+
+test('switching characters keeps both verified model caches and removes only old revisions of the same path',async()=>{
+ const original=globalThis.caches,items=new Map();
+ const cache={match:async key=>items.get(key)?.clone(),put:async(key,response)=>items.set(key,response),keys:async()=>[...items.keys()].map(key=>new Request(key)),delete:async key=>items.delete(key)};
+ globalThis.caches={open:async()=>cache};
+ try{
+  const options={...tiny,asset:{revision:hash},fetchImpl:async()=>new Response(raw)};
+  await transferGLB(url,null,options);await transferGLB('https://example.test/models/zhuang-fangyi.glb',null,options);
+  assert.equal(items.size,2);
+  const result=await transferGLB(url,null,{...options,fetchImpl:async()=>{throw new Error('must use Si cache');}});assert(Buffer.from(result).equals(raw));
+ }finally{if(original)globalThis.caches=original;else delete globalThis.caches;}
+});
