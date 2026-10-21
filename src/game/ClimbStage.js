@@ -3,8 +3,9 @@ import { BoxGeometry, ConeGeometry, CylinderGeometry, Group, Mesh, MeshStandardM
 // Shares the viewer's scene, camera, character and render loop. The patrol is an
 // original low-poly placeholder, not a claimed reproduction of the official pet.
 export class ClimbStage {
-  constructor(scene, cameraController, models, config) {
+  constructor(scene, cameraController, models, config, actor=null) {
     this.scene = scene; this.camera = cameraController; this.models = models; this.config = config;
+    this.actor=actor;
     this.root = new Group(); this.root.name = 'climb-prototype'; this.root.visible = false; scene.scene.add(this.root);
     this.geometries = []; this.materials = []; this.blockMeshes = new Map();
     const geometry = value => { this.geometries.push(value); return value; };
@@ -39,8 +40,14 @@ export class ClimbStage {
     this.scan.rotation.z=-Math.PI/2;this.root.add(this.scan);this.root.add(this.enemy);
     this.target=new Vector3();this.lookAt=new Vector3();this.cameraOffset=new Vector3();
     this.active=false;
+    if(actor)this.root.add(actor.root);
   }
   attach() {
+    if(this.actor){
+      this.currentPosition=new Vector3(this.config.start.x,this.config.start.y,0);this.facing=.55;this.animation=null;this.time=0;
+      this.active=true;this.root.visible=true;this.camera.transition=null;this.camera.story=null;this.camera.stopShoeOrbit();
+      this.camera.controls.enabled=false;this.scene.camera.near=.05;this.scene.camera.far=100;this.frameCamera(true);return true;
+    }
     const model=this.models.current;
     if(!model?.idle?.supported)return false;
     if(this.model===model)return true;
@@ -65,7 +72,7 @@ export class ClimbStage {
     if(!this.active)return;
     const canvas=this.scene.renderer.domElement,rect=canvas.getBoundingClientRect();
     const landscape=rect.width>rect.height;
-    const top=landscape?120:185,bottom=landscape?80:170;
+    const top=landscape?120:(this.config.cameraTop??185),bottom=landscape?80:(this.config.cameraBottom??170);
     const available=Math.max(140,rect.height-top-bottom),visibleRatio=available/rect.height;
     // Track a small local section, not the entire tower; keep Si readable.
     const distance=Math.max(6.6/Math.max(.5,rect.width/available),5.7)/(2*Math.tan(this.scene.camera.fov*Math.PI/360)*visibleRatio);
@@ -79,7 +86,7 @@ export class ClimbStage {
   update(engine,delta) {
     if(!this.active)return;
     const frozen=['paused','call'].includes(engine.state),dt=frozen?0:delta;
-    this.time+=dt;const idle=this.model.idle;
+    this.time+=dt;const idle=this.model?.idle;
     let weight=0,kind='idle';
     if(this.animation){
       this.animation.time+=engine.state==='call'?delta:dt;const a=this.animation,t=Math.min(1,a.time/this.config.moveSeconds),e=t*t*(3-2*t);
@@ -90,6 +97,8 @@ export class ClimbStage {
     }else this.currentPosition.set(engine.player.x,engine.player.y,0);
     const facing=engine.state==='call'?.3:engine.player.facing*Math.PI*.38;
     this.facing+=(facing-this.facing)*(1-Math.exp(-dt*14));
+    if(this.actor)this.actor.update(this.currentPosition,this.facing,this.time,weight,kind,engine.state);
+    else {
     this.model.group.rotation.set(0,this.facing,0);
     // The imported model's origin is not its center. Rotate and scale the saved
     // centering translation together with the wrapper before placing its feet.
@@ -108,12 +117,15 @@ export class ClimbStage {
       idle.applyPose(pose,rest[0]+pitch,rest[1],rest[2]+roll);
     }
     idle.setBlink(Math.max(0,1-Math.abs((this.time%4)-.1)/.1));
+    }
     this.syncBlocks(engine);
     this.waste.position.y=engine.waste;
+    this.waste.visible=this.config.wasteEnabled!==false;
+    for(const b of this.bubbles)b.visible=this.waste.visible;
     for(let i=0;i<this.bubbles.length;i++){const b=this.bubbles[i];b.position.y=engine.waste+.12+((this.time*.28+i*.17)%1)*.5;b.scale.setScalar(.6+.4*Math.sin(this.time*2+i)**2);}
     const patrol=engine.patrol;this.enemy.position.set(patrol.x,patrol.y+1.15+Math.sin(this.time*3)*.12,.7);
-    this.ring.rotation.z=this.time;this.enemy.visible=engine.called;
-    this.scan.visible=engine.called&&patrol.phase!=='rest';
+    this.ring.rotation.z=this.time;this.enemy.visible=engine.called&&this.config.patrolEnabled!==false;
+    this.scan.visible=this.enemy.visible&&patrol.phase!=='rest';
     this.scan.position.set(patrol.x+patrol.direction*this.config.patrol.range/2,patrol.y+.65,.35);
     this.scan.rotation.z=patrol.direction>0?-Math.PI/2:Math.PI/2;
     this.scanMaterial.color.set(patrol.phase==='scan'?0xf58268:0xf0d678);
@@ -139,6 +151,7 @@ export class ClimbStage {
     }
   }
   detach() {
+    if(this.actor){this.active=false;this.root.visible=false;this.scene.camera.clearViewOffset();return;}
     if(!this.model)return;
     const {group,idle}=this.model;
     group.position.copy(this.saved.position);group.quaternion.copy(this.saved.quaternion);group.scale.copy(this.saved.scale);
@@ -146,5 +159,5 @@ export class ClimbStage {
     idle.setPlaying(this.saved.playing);this.model=null;this.active=false;this.root.visible=false;
     this.scene.camera.clearViewOffset();
   }
-  dispose() { this.detach();this.root.removeFromParent();for(const g of this.geometries)g.dispose();for(const m of this.materials)m.dispose(); }
+  dispose() { this.detach();this.actor?.dispose();this.root.removeFromParent();for(const g of this.geometries)g.dispose();for(const m of this.materials)m.dispose(); }
 }

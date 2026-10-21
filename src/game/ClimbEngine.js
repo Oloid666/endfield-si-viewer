@@ -58,7 +58,7 @@ export class ClimbEngine {
     this.lastAction = { kind, from: before.player, to: { ...this.player }, block: moved, blockFrom: moved ? before.blocks.find(b=>b.id===moved) : null, at: this.clock };
     const support = this.blockAt(x, y-1);
     if (support?.kind === 'fragile' && support.crack === null) support.crack = 0;
-    if (x >= 4 && !this.called) { this.called = true; this.state = 'call'; }
+    if (x >= (this.config.callAt ?? 4) && !this.called) { this.called = true; this.state = 'call'; }
     if (x === this.config.exit.x && y === this.config.exit.y) this.state = 'won';
     return this.lastAction;
   }
