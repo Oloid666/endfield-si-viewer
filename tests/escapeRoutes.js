@@ -8,5 +8,8 @@ export const escapeRoutes = {
   plate:'r c r c r r r r r r r',
   jets:'r u u u u r r r r r r r',
   ration:'r p r p r t k t r r p r p r t k t p r r r',
+  warehouse:'r c r r c l l u u u r c r r r r r r c r r',
+  vault:'r r c r r c l l l u u u u r r r r r r r r r d d d d l l l l l l l l l l',
+  unload:'r r r c r r c p l l l l l c r r r r r r r r c r r r',
 };
 for(const key of Object.keys(escapeRoutes))escapeRoutes[key]=escapeRoutes[key].split(' ');
