@@ -15,6 +15,9 @@ import { GameStage } from './game/GameStage.js';
 import { climbConfig } from './config/climbConfig.js';
 import { ClimbStage } from './game/ClimbStage.js';
 import { ClimbGame } from './game/ClimbGame.js';
+import { EscapeGame } from './game/EscapeGame.js';
+import { EscapeStage } from './game/EscapeStage.js';
+import { escapeLevels } from './config/escapeConfig.js';
 
 const status = document.querySelector('#status');
 const fileInput = document.querySelector('#model-file');
@@ -41,6 +44,8 @@ let photography;
 let game;
 let gameStage;
 let climb;
+let escapeGame;
+let hiddenEscapeModel;
 let zone='si';
 let lastViewerZone='si';
 let graphicsLost=false;
@@ -189,6 +194,7 @@ async function loadModel(url, label, isDefault = false, characterKey='si') {
 try {
   scene = new SceneManager(document.querySelector('#viewport'), viewerConfig, () => {
     graphicsLost=true;game?.pause();climb?.pause();
+    escapeGame?.setAvailable(false);
     climb?.setReady(false);
     showStatus('WebGL 繪圖連線已中斷，請重新整理頁面。', true);
     loadPanel.hidden=false;loadTitle.textContent='3D 繪圖已中斷';loadProgress.hidden=true;loadDetail.textContent='請重新整理頁面，已下載的模型可從快取讀取。';
@@ -232,7 +238,9 @@ try {
     const header = document.querySelector('header').getBoundingClientRect();
     const panel = document.querySelector('.panel').getBoundingClientRect();
     const nav=document.querySelector('.zone-nav').getBoundingClientRect();
-    if(zone==='climb'){
+    if(zone==='escape'){
+      escapeGame?.stage.frameCamera(true);return;
+    }else if(zone==='climb'){
       climb?.stage.frameCamera(true);return;
     }else if(zone==='game'){
       const hud=document.querySelector('.game-hud')?.getBoundingClientRect();
@@ -250,16 +258,22 @@ try {
   observer.observe(document.querySelector('#viewport'));
   observer.observe(document.querySelector('.panel'));
   async function selectZone(next){
-    if(graphicsLost||!['si','zhuang','game','climb'].includes(next))return;
+    if(graphicsLost||!['si','zhuang','game','climb','escape'].includes(next))return;
     if(game?.active)game.leave();
     if(climb?.active)climb.leave();
+    if(escapeGame?.active)escapeGame.leave();
+    if(hiddenEscapeModel){hiddenEscapeModel.group.visible=hiddenEscapeModel.visible;hiddenEscapeModel=null;}
     ++requestId;models.cancelLoad();models.stopGesture();actionPanel.cancel();dialogue.cancel();photography.reset();camera.story=null;
-    zone=next;if(!['game','climb'].includes(next))lastViewerZone=next;
+    zone=next;if(!['game','climb','escape'].includes(next))lastViewerZone=next;
     document.querySelector('#app').dataset.zone=next;
     history.replaceState(null,'',`#${next}`);
-    for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.setAttribute('aria-pressed',String(button.dataset.zone===next||(next==='climb'&&button.dataset.zone==='game')));
+    for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.setAttribute('aria-pressed',String(button.dataset.zone===next||(['climb','escape'].includes(next)&&button.dataset.zone==='game')));
     document.querySelector('#face-panel').hidden=next==='zhuang';document.querySelector('#action-section').hidden=next==='zhuang';
-    camera.controls.enabled=!['game','climb'].includes(next);setPanelExpanded(false);cameraMode=['game','climb'].includes(next)?next:'full';
+    camera.controls.enabled=!['game','climb','escape'].includes(next);setPanelExpanded(false);cameraMode=['game','climb','escape'].includes(next)?next:'full';
+    if(next==='escape'){
+      if(models.current){hiddenEscapeModel={group:models.current.group,visible:models.current.group.visible};models.current.group.visible=false;}
+      loadPanel.hidden=true;escapeGame.enter();resize();return;
+    }
     if(next==='game')game.enter();
     if(next==='climb')climb.enter();
     const key=next==='zhuang'?'zhuang':'si',character=viewerConfig.characters[key];
@@ -279,15 +293,22 @@ try {
   climb=new ClimbGame(document.querySelector('#climb-root'),new ClimbStage(scene,camera,models,climbConfig),climbConfig,{
     exit:()=>selectZone('game'),view:()=>selectZone(lastViewerZone),
   });
+  escapeGame=new EscapeGame(document.querySelector('#escape-root'),new EscapeStage(scene,camera,models,escapeLevels[0]),{exit:()=>selectZone('game')});
+  const escapeLink=document.createElement('button');escapeLink.id='escape-link';escapeLink.textContent='呱嘎管理員 · 四種玩法 →';
+  escapeLink.addEventListener('click',()=>selectZone('escape'));document.querySelector('#game-card .actions').prepend(escapeLink);
   const climbLink=document.createElement('button');climbLink.id='climb-link';climbLink.textContent='新試玩：查勤爬塔 →';
   climbLink.addEventListener('click',()=>selectZone('climb'));
   document.querySelector('#game-card .actions').prepend(climbLink);
   for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.addEventListener('click',()=>selectZone(button.dataset.zone));
-  zoneHashListener=()=>{const next=location.hash.slice(1);if(next!==zone&&['si','zhuang','game','climb'].includes(next))selectZone(next);};
+  zoneHashListener=()=>{const next=location.hash.slice(1);if(next!==zone&&['si','zhuang','game','climb','escape'].includes(next))selectZone(next);};
   window.addEventListener('hashchange',zoneHashListener);
   observer.observe(document.querySelector('#game-chart'));
   resize();
   scene.start((delta) => {
+    if(zone==='escape'){
+      escapeGame.update(delta);theater.update(null,delta);scene.scene.background=background;
+      comics.update(delta,scene.camera,null,null,true);return;
+    }
     if(zone==='climb'){
       climb.update(delta);theater.update(null,delta);scene.scene.background=background;
       comics.update(delta,scene.camera,null,null,true);return;
@@ -346,7 +367,7 @@ try {
     finally { URL.revokeObjectURL(url); }
   });
   document.querySelector('#retry-model').addEventListener('click',()=>{if(graphicsLost){location.reload();return;}const key=zone==='zhuang'?'zhuang':'si',c=viewerConfig.characters[key];loadModel(`${import.meta.env.BASE_URL}${c.path}`,c.name,true,key);});
-  selectZone(['si','zhuang','game','climb'].includes(location.hash.slice(1))?location.hash.slice(1):'si');
+  selectZone(['si','zhuang','game','climb','escape'].includes(location.hash.slice(1))?location.hash.slice(1):'si');
 } catch (error) {
   console.error(error);
   showStatus('無法啟動 WebGL 3D 顯示。請使用支援 WebGL 的 Safari／Chrome／Edge，並確認硬體加速可用。', true);
@@ -363,6 +384,7 @@ window.addEventListener('pagehide', (event) => {
   ++requestId;
   game?.dispose();
   climb?.dispose();
+  escapeGame?.dispose();
   window.removeEventListener('hashchange',zoneHashListener);
   observer?.disconnect();
   gazePointer?.dispose();
