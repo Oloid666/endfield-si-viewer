@@ -11,6 +11,7 @@ import { raftConfig, riverCenter } from '../config/raftConfig.js';
 export class RaftStage {
   constructor(scene, camera, models, config = raftConfig) {
     this.config = config;
+    this.center = config.center || riverCenter;
     this.scene = scene;
     this.camera = camera;
     this.models = models;
@@ -71,14 +72,14 @@ export class RaftStage {
     this.waterTexture = this.own(new CanvasTexture(canvas));
     this.waterTexture.wrapS = this.waterTexture.wrapT = RepeatWrapping;
     this.waterTexture.repeat.set(9, 55);
-    const water = this.mesh(this.own(new PlaneGeometry(70, 340)), this.material(0xb6d2af, { map: this.waterTexture, roughness: .45 }), this.root, [0, -.08, -125]);
+    const water = this.mesh(this.own(new PlaneGeometry(100, Math.max(340, this.config.length + 100))), this.material(0xb6d2af, { map: this.waterTexture, roughness: .45 }), this.root, [0, -.08, -this.config.length / 2]);
     water.rotation.x = -Math.PI / 2;
 
     // Two continuous banks, rather than hundreds of terrain tiles.
     for (const side of [-1, 1]) {
       const vertices = [], indices = [];
-      for (let i = 0; i <= 100; i++) {
-        const s = -25 + i * 3.2, center = riverCenter(s);
+      for (let i = 0; i <= Math.ceil((this.config.length + 100) / 3.2); i++) {
+        const s = -25 + i * 3.2, center = this.center(s);
         for (const width of [this.config.riverHalfWidth, 35]) vertices.push(center + side * width, .05, -s);
         if (i) { const j = i * 2; indices.push(j - 2, j, j - 1, j - 1, j, j + 1); }
       }
@@ -89,19 +90,19 @@ export class RaftStage {
       this.mesh(geometry, this.material(0x58785b), this.root);
     }
     const stems = [], leaves = [], rocks = [], huts = [], roofs = [], piers = [];
-    for (let i = 0; i < 95; i++) {
+    for (let i = 0; i < Math.ceil((this.config.length + 50) / 3.2); i++) {
       const s = i * 3.2 - 15, side = i % 2 ? 1 : -1;
-      const x = riverCenter(s) + side * (8 + i % 5 * .8), height = 3.7 + i % 4;
+      const x = this.center(s) + side * (this.config.riverHalfWidth + 1.7 + i % 5 * .8), height = 3.7 + i % 4;
       stems.push({ p: [x, height / 2, -s], s: [.1, height, .1], r: [0, 0, side * .07] });
       for (let j = 0; j < 3; j++) {
         leaves.push({ p: [x + Math.sin(i + j) * .5, height - .4 - j * .55, -s], s: [1.65, .06, .5], r: [.2, i + j * 1.3, side * .32] });
       }
-      if (i % 3 === 0) rocks.push({ p: [riverCenter(s) + side * 6.9, .25, -s], s: [1.6, 1.1, 1.2], r: [.1, i, .3] });
+      if (i % 3 === 0) rocks.push({ p: [this.center(s) + side * (this.config.riverHalfWidth + .6), .25, -s], s: [1.6, 1.1, 1.2], r: [.1, i, .3] });
       if (i % 10 === 0) {
         huts.push({ p: [x + side * 3, 1.3, -s], s: [3.2, 2.5, 3] });
         roofs.push({ p: [x + side * 3, 3, -s], s: [3.5, 1.9, 3.5], r: [0, Math.PI / 4, 0] });
       }
-      if (i % 13 === 0) piers.push({ p: [riverCenter(s) + side * 5.5, .35, -s], s: [3.2, .3, 3.6] });
+      if (i % 13 === 0) piers.push({ p: [this.center(s) + side * (this.config.riverHalfWidth - .8), .35, -s], s: [3.2, .3, 3.6] });
     }
     this.instances(cylinder, bamboo, stems);
     this.instances(box, leaf, leaves);
@@ -111,7 +112,7 @@ export class RaftStage {
     this.instances(box, wood, piers);
 
     // A simple landmark waterwheel, all rigid pieces reused.
-    this.wheel = new Group(); this.wheel.position.set(riverCenter(50) + 9, 2.5, -50); this.root.add(this.wheel);
+    this.wheel = new Group(); this.wheel.position.set(this.center(50) + this.config.riverHalfWidth + 2.7, 2.5, -50); this.root.add(this.wheel);
     const wheelRim = this.own(new TorusGeometry(2.8, .14, 5, 28));
     this.mesh(wheelRim, wood, this.wheel).rotation.y = Math.PI / 2;
     for (let i = 0; i < 10; i++) {
@@ -119,22 +120,23 @@ export class RaftStage {
       const spoke = this.mesh(box, wood, this.wheel, [0, 0, 0], [.13, 5.5, .13]); spoke.rotation.x = angle;
       const paddle = this.mesh(box, bamboo, this.wheel, [0, Math.cos(angle) * 2.7, Math.sin(angle) * 2.7], [1.4, .28, .6]); paddle.rotation.x = angle;
     }
+    this.obstacleRoot = new Group(); this.root.add(this.obstacleRoot);
     for (const o of this.config.obstacles) {
-      const x = riverCenter(o.s) + o.offset;
-      this.mesh(cylinder, wood, this.root, [x, .6, -o.s], [o.radius * .65, 1.4, o.radius * .65]);
-      this.mesh(cylinder, pale, this.root, [x, 1.32, -o.s], [o.radius * .68, .08, o.radius * .68]);
+      const x = this.center(o.s) + o.offset;
+      this.mesh(cylinder, wood, this.obstacleRoot, [x, .6, -o.s], [o.radius * .65, 1.4, o.radius * .65]);
+      this.mesh(cylinder, pale, this.obstacleRoot, [x, 1.32, -o.s], [o.radius * .68, .08, o.radius * .68]);
     }
     const stampGeometry = this.own(new TorusGeometry(.55, .12, 6, 16));
     this.stamps = this.config.stamps.map(o => {
-      const mesh = this.mesh(stampGeometry, jade, this.root, [riverCenter(o.s) + o.offset, .95, -o.s]);
+      const mesh = this.mesh(stampGeometry, jade, this.root, [this.center(o.s) + o.offset, .95, -o.s]);
       this.mesh(box, pale, mesh, [0, 0, 0], [.3, .3, .15]).rotation.z = Math.PI / 4;
       return mesh;
     });
     // Finish pier and arch remain visibly different from ordinary scenery.
-    const endX = riverCenter(this.config.length);
-    this.mesh(box, wood, this.root, [endX, .1, -this.config.length - 5], [10, .3, 4]);
-    for (const side of [-1, 1]) this.mesh(cylinder, bamboo, this.root, [endX + side * 5.8, 3, -this.config.length], [.16, 6, .16]);
-    this.mesh(box, dark, this.root, [endX, 5.6, -this.config.length], [12.4, .5, .9]);
+    const endX = this.center(this.config.length), archHalf = this.config.roadHalfWidth || 5.8;
+    this.mesh(box, wood, this.root, [endX, .1, -this.config.length - 5], [archHalf * 2, .3, 4]);
+    for (const side of [-1, 1]) this.mesh(cylinder, bamboo, this.root, [endX + side * archHalf, 3, -this.config.length], [.16, 6, .16]);
+    this.mesh(box, dark, this.root, [endX, 5.6, -this.config.length], [archHalf * 2 + .8, .5, .9]);
 
     this.raft = new Group(); this.root.add(this.raft);
     this.buildVehicles({ box, sphere, cylinder, cone, wood, bamboo, dark, pale, jade });
@@ -213,7 +215,7 @@ export class RaftStage {
     const dt = engine.state === 'playing' ? Math.min(delta, .12) : 0;
     this.time += dt;
     const t = this.time, p = engine.pet;
-    const slope = (riverCenter(engine.progress + .5) - riverCenter(engine.progress - .5)) + engine.velocity / Math.max(engine.speed, 1);
+    const slope = (this.center(engine.progress + .5) - this.center(engine.progress - .5)) + engine.velocity / Math.max(engine.speed, 1);
     this.raft.position.set(engine.x, Math.sin(t * 2.4) * .045, engine.z);
     this.raft.rotation.set(Math.sin(t * 2) * .025, -Math.atan(slope), -engine.velocity * .045 + Math.sin(t * 2.8) * .02);
     this.pole.rotation.x = Math.sin(t * 4) * .14;

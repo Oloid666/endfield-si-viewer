@@ -19,13 +19,13 @@ export class RaftEngine {
     this.cooldown = 0;
     this.hit = 0;
     this.ink = new Set();
-    this.pet = { x: riverCenter(0), z: this.config.ropeLength, vx: 0, vz: 0 };
+    this.pet = { x: (this.config.center || riverCenter)(0), z: this.config.ropeLength, vx: 0, vz: 0 };
     this.event = null;
     this.heading = this.drift = this.boost = this.charge = this.spins = this.spinCooldown = 0;
     this.braking = false;
   }
 
-  get x() { return riverCenter(this.progress) + this.offset; }
+  get x() { return (this.config.center || riverCenter)(this.progress) + this.offset; }
   get z() { return -this.progress; }
 
   start() { this.reset(); this.state = 'playing'; }
@@ -89,6 +89,12 @@ export class RaftEngine {
       }
     });
 
+    this.updatePet(dt, brake);
+    if (this.progress >= c.length) { this.state = 'won'; this.event = 'finish'; }
+  }
+
+  updatePet(dt, brake) {
+    const c = this.config;
     const pet = this.pet;
     const tx = this.x, tz = this.z + (brake ? c.ropeLength * .68 : c.ropeLength);
     pet.vx += ((tx - pet.x) * 8 - pet.vx * 2.6) * dt;
@@ -104,7 +110,6 @@ export class RaftEngine {
       pet.vx -= radial * dx / length;
       pet.vz -= radial * dz / length;
     }
-    if (this.progress >= c.length) { this.state = 'won'; this.event = 'finish'; }
   }
 
   bump(kind) {

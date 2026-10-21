@@ -1,15 +1,41 @@
 import { raftConfig } from './raftConfig.js';
 
+export function rideCenter(s) {
+  const enter = Math.max(0, Math.min(1, (s - 260) / 80));
+  const leave = 1 - Math.max(0, Math.min(1, (s - 630) / 80));
+  return Math.sin(s * .013) * 14 + Math.sin(s * .031) * 6 + Math.sin((s - 260) * .045) * 8 * enter * leave;
+}
+
 export const rideConfig = {
   ...raftConfig,
-  length: 280,
-  speed: 11.8,
-  brakeSpeed: 5.2,
+  center: rideCenter,
+  length: 900,
+  speed: 19,
+  brakeSpeed: 11,
+  maxSpeed: 34,
+  roadHalfWidth: 10.5,
+  riverHalfWidth: 13,
+  edge: 8.2,
   actorHeight: 2.6,
   ropeLength: 3.3,
   maxRopeLength: 7.5,
-  driving: { turn: .7, grip: 2.4, driftGrip: 1.15, acceleration: 2.3, boostSpeed: 5, boostSeconds: 1.6 },
-  obstacles: [...raftConfig.obstacles, { s: 255, offset: 1.8, radius: .9 }],
+  driving: { turn: .57, driftTurn: .95, grip: 5.5, driftGrip: .85, sidePower: .7, curveForce: .6, acceleration: 3.2, boostSpeed: 8, boostSeconds: 1.5, minDriftSpeed: 7 },
+  gas: { start: 1, capacity: 2, seconds: 3.2, speed: 14 },
+  obstacles: [
+    { s: 95, offset: 0, radius: 1 }, { s: 150, offset: -5, radius: 1.2 },
+    { s: 210, offset: 4, radius: 1.1 }, { s: 290, offset: -2, radius: 1.3 },
+    { s: 350, offset: -5, radius: 1.1 }, { s: 350, offset: 4.5, radius: 1.1 },
+    { s: 425, offset: 0, radius: 1.3 }, { s: 500, offset: 5, radius: 1.1 },
+    { s: 565, offset: -4, radius: 1.2 }, { s: 645, offset: 1.5, radius: 1.3 },
+    { s: 710, offset: -5, radius: 1.1 }, { s: 710, offset: 4.5, radius: 1.1 },
+    { s: 790, offset: 0, radius: 1.3 }, { s: 850, offset: -4, radius: 1.1 },
+  ],
+  stamps: Array.from({ length: 15 }, (_, i) => ({ s: 45 + i * 57, offset: [0, -4, 4, -2, 2][i % 5] })),
+  pickups: [
+    { s: 65, offset: 0 }, { s: 190, offset: -3.5 }, { s: 335, offset: 3 },
+    { s: 470, offset: -3 }, { s: 610, offset: 4 }, { s: 760, offset: 0 },
+  ],
+  sectors: [{ s: 0, name: '清波寨快速路', caption: '工作地點：持續移動中' }, { s: 300, name: '連彎工業區', caption: '氣態息壤，固態嘴硬' }, { s: 650, name: '禁止正常上班', caption: '前方簽到，禁止超速辦公' }],
 };
 
 export const rideProfiles = {
@@ -17,7 +43,7 @@ export const rideProfiles = {
     name: '祀', vehicle: '漂浮迷你帝江號', companion: '小聰明', hover: .95,
     source: 'https://sketchfab.com/3d-models/si-arknights-endfield-304e5f23db204cbd834b44138ca570d7',
     title: '帝江號，怎麼祀你在開？',
-    intro: '祀坐迷你帝江號，小聰明被迫當風箏。按住方向轉彎；同時按煞車甩尾，放開煞車會噴焰加速。',
+    intro: '900 公尺寬路甩尾！祀坐迷你帝江號，小聰明被迫當風箏。方向＋煞車蓄甩尾，放開噴射；氣態息壤可再加速。',
     start: '祀：縮小了，應該不用申請航線吧。',
     boost: '系統：航線未核准。　祀：那就飛快一點。',
     bump: '小聰明：這不是帝江號，是抵牆號！！',
@@ -29,7 +55,7 @@ export const rideProfiles = {
     name: '莊芳宜', vehicle: '失控辦公椅', companion: '龍泡泡', hover: 0,
     source: 'https://sketchfab.com/3d-models/zhuang-fangyi-arknights-endfield-51d669eb7ef94cb49aeeaf2d9541d9de',
     title: '椅直在上班。',
-    intro: '莊芳宜坐得很端正，辦公椅完全不端正。煞車加方向甩尾，鬆開煞車加速；碰撞與急彎可能讓椅子自己轉半圈。',
+    intro: '900 公尺椅動辦公。方向＋煞車蓄甩尾，放開加速；氣態息壤讓辦公椅正式失去工作能力。碰撞與大甩尾會轉椅。',
     start: '莊芳宜：只是換個地方辦公。　龍泡泡：啵？',
     boost: '工業集成系統：椅動辦公，效率翻倍。',
     bump: '莊芳宜：椅子留下。　系統：人已經出去了。',

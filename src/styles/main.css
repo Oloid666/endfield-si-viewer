@@ -215,11 +215,17 @@ header { top: calc(74px + env(safe-area-inset-top)); } #character-name { font-we
 
 /* Raft uses the same canvas. Only the HUD and held touch controls sit above it. */
 .ride-picker { display:flex;gap:6px;margin-bottom:14px; }.ride-picker button { flex:1;min-height:48px;font-size:11px;padding:8px; }.ride-picker button[aria-pressed="true"] { background:#d9d5a1;color:#233d30; }
-#ride-comic { position:absolute;top:calc(185px + env(safe-area-inset-top));left:50%;transform:translateX(-50%) rotate(-3deg);width:max-content;max-width:calc(100% - 32px);padding:10px 16px;color:#292e25;background:#ece5c5;border:3px solid #253a31;box-shadow:5px 5px 0 #253a31;pointer-events:none;text-align:center; }
+.ride-drift { position:absolute;top:calc(176px + env(safe-area-inset-top));left:16px;right:16px;padding:6px 10px;background:#213b32e8;--drift-color:#94cdbd; }
+.ride-drift label { display:block;font-size:10px;margin-bottom:3px; }.ride-drift meter { display:block;width:100%;height:9px;accent-color:var(--drift-color); }.ride-drift meter::-webkit-meter-optimum-value { background:var(--drift-color); }
+#ride-root[data-tier="2"] .ride-drift { --drift-color:#edba77; }#ride-root[data-tier="3"] .ride-drift { --drift-color:#cfaff4; }
+#ride-root .raft-controls button { padding:6px;font-size:22px; }#ride-root .raft-controls small { font-size:8px;line-height:1.3; }#ride-root .raft-controls [data-raft="brake"] { font-size:17px; }#ride-root .raft-controls #ride-gas { font-size:14px;background:#b7d6bc;color:#223e30; }
+.ride-vfx { position:absolute;inset:0;pointer-events:none;opacity:0;background:linear-gradient(100deg,#b4e2cb55,transparent 19%,transparent 80%,#b4e2cb66),linear-gradient(75deg,transparent 10%,#d8e6ce44 10.3%,transparent 10.8%,transparent 88%,#d8e6ce44 88.3%,transparent 88.8%); }
+#ride-root[data-boost="true"] .ride-vfx { opacity:.55; }#ride-root[data-gas="true"] .ride-vfx { opacity:.8; }#ride-root[data-impact="true"] .ride-vfx { opacity:.7;background:radial-gradient(ellipse at center,transparent 48%,#f3d99c66); }
+#ride-comic { position:absolute;top:calc(224px + env(safe-area-inset-top));left:18px;transform:rotate(-3deg);width:max-content;max-width:min(260px,calc(100% - 36px));padding:8px 12px;color:#292e25;background:#ece5c5;border:3px solid #253a31;box-shadow:5px 5px 0 #253a31;pointer-events:none;text-align:center; }
 #ride-comic small { display:block;font-size:9px;margin-bottom:4px; }#ride-comic strong { display:block;font-size:20px;font-weight:800; }
 #ride-root[data-boost="true"] .raft-meters { border-left-color:#ffd578;color:#ffdf9c; }
 #ride-root .raft-card { max-height:calc(100dvh - 235px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
-@media(max-height:500px) { #ride-comic { top:calc(173px + env(safe-area-inset-top));left:24%;max-width:43%;padding:7px 10px; }#ride-comic strong { font-size:15px; }#ride-root .raft-card { max-height:calc(100dvh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }.ride-picker { margin-bottom:8px; }.ride-picker button { min-height:42px;font-size:10px;padding:5px; } }
+@media(max-height:500px) { .ride-drift { top:calc(163px + env(safe-area-inset-top));right:53%; }#ride-comic { top:calc(211px + env(safe-area-inset-top));left:18px;max-width:43%;padding:7px 10px; }#ride-comic strong { font-size:15px; }#ride-root .raft-card { max-height:calc(100dvh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }.ride-picker { margin-bottom:8px; }.ride-picker button { min-height:42px;font-size:10px;padding:5px; } }
 #app:is([data-zone="raft"],[data-zone="ride"]) header,#app:is([data-zone="raft"],[data-zone="ride"]) .panel,#app:is([data-zone="raft"],[data-zone="ride"]) #quick-stop,#app:is([data-zone="raft"],[data-zone="ride"]) #shoe-status { display:none; }
 #app:is([data-zone="raft"],[data-zone="ride"]) #load-panel { z-index:10; }
 :is(#raft-root,#ride-root) { position:absolute;inset:0;z-index:4;pointer-events:none;color:#eff2de; }
