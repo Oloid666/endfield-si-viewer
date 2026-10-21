@@ -18,6 +18,8 @@ import { ClimbGame } from './game/ClimbGame.js';
 import { EscapeGame } from './game/EscapeGame.js';
 import { EscapeStage } from './game/EscapeStage.js';
 import { escapeLevels } from './config/escapeConfig.js';
+import { RaftGame } from './game/RaftGame.js';
+import { RaftStage } from './game/RaftStage.js';
 
 const status = document.querySelector('#status');
 const fileInput = document.querySelector('#model-file');
@@ -45,6 +47,7 @@ let game;
 let gameStage;
 let climb;
 let escapeGame;
+let raft;
 let hiddenEscapeModel;
 let zone='si';
 let lastViewerZone='si';
@@ -135,6 +138,7 @@ async function loadModel(url, label, isDefault = false, characterKey='si') {
   const character=isDefault?viewerConfig.characters[characterKey]:null;
   game?.setReady(false);
   climb?.setReady(false);
+  raft?.setReady(false);
   loadPanel.hidden=false;loadTitle.textContent=character?`正在下載${character.name}`:`正在載入 ${label}`;
   loadProgress.removeAttribute('value');loadProgress.hidden=false;
   const asset=character?(viewerConfig.modelTransfer.assets[character.path]||(characterKey==='si'?viewerConfig.modelTransfer.asset:null)):null;
@@ -181,6 +185,7 @@ async function loadModel(url, label, isDefault = false, characterKey='si') {
     loadPanel.hidden=true;
     game?.setReady(model.characterId==='si'&&!!model.idle.leek);
     climb?.setReady(zone==='climb'&&model.characterId==='si'&&model.idle.supported);
+    raft?.setReady(zone==='raft'&&model.characterId==='si'&&model.idle.supported);
   } catch (error) {
     if (id !== requestId) return;
     console.error('Model load failed:', error);
@@ -194,6 +199,7 @@ async function loadModel(url, label, isDefault = false, characterKey='si') {
 try {
   scene = new SceneManager(document.querySelector('#viewport'), viewerConfig, () => {
     graphicsLost=true;game?.pause();climb?.pause();
+    raft?.pause();raft?.setReady(false);
     escapeGame?.setAvailable(false);
     climb?.setReady(false);
     showStatus('WebGL 繪圖連線已中斷，請重新整理頁面。', true);
@@ -239,6 +245,7 @@ try {
     const panel = document.querySelector('.panel').getBoundingClientRect();
     const nav=document.querySelector('.zone-nav').getBoundingClientRect();
     if(zone==='hub')return;
+    if(zone==='raft'){raft?.stage.frameCamera(raft.engine);return;}
     if(zone==='escape'){
       escapeGame?.stage.frameCamera(true);return;
     }else if(zone==='climb'){
@@ -259,30 +266,33 @@ try {
   observer.observe(document.querySelector('#viewport'));
   observer.observe(document.querySelector('.panel'));
   async function selectZone(next){
-    if(graphicsLost||!['si','zhuang','hub','game','climb','escape'].includes(next))return;
+    if(graphicsLost||!['si','zhuang','hub','game','climb','escape','raft'].includes(next))return;
     if(game?.active)game.leave();
     if(climb?.active)climb.leave();
     if(escapeGame?.active)escapeGame.leave();
+    if(raft?.active)raft.leave();
     if(hiddenEscapeModel){hiddenEscapeModel.group.visible=hiddenEscapeModel.visible;hiddenEscapeModel=null;}
     ++requestId;models.cancelLoad();models.stopGesture();actionPanel.cancel();dialogue.cancel();photography.reset();camera.story=null;
-    zone=next;if(!['hub','game','climb','escape'].includes(next))lastViewerZone=next;
+    zone=next;if(!['hub','game','climb','escape','raft'].includes(next))lastViewerZone=next;
     document.querySelector('#app').dataset.zone=next;
     document.querySelector('#game-hub').hidden=next!=='hub';
     history.replaceState(null,'',`#${next}`);
-    for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.setAttribute('aria-pressed',String(button.dataset.zone===next||(['game','climb','escape'].includes(next)&&button.dataset.zone==='hub')));
+    for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.setAttribute('aria-pressed',String(button.dataset.zone===next||(['game','climb','escape','raft'].includes(next)&&button.dataset.zone==='hub')));
     document.querySelector('#face-panel').hidden=next==='zhuang';document.querySelector('#action-section').hidden=next==='zhuang';
-    camera.controls.enabled=!['hub','game','climb','escape'].includes(next);setPanelExpanded(false);cameraMode=['hub','game','climb','escape'].includes(next)?next:'full';
+    camera.controls.enabled=!['hub','game','climb','escape','raft'].includes(next);setPanelExpanded(false);cameraMode=['hub','game','climb','escape','raft'].includes(next)?next:'full';
     if(next==='escape'||next==='hub'){
       if(models.current){hiddenEscapeModel={group:models.current.group,visible:models.current.group.visible};models.current.group.visible=false;}
       loadPanel.hidden=true;camera.stopShoeOrbit();if(next==='escape')escapeGame.enter();resize();return;
     }
     if(next==='game')game.enter();
     if(next==='climb')climb.enter();
+    if(next==='raft')raft.enter();
     const key=next==='zhuang'?'zhuang':'si',character=viewerConfig.characters[key];
     resize();
     if(models.current?.characterId===key){
       loadPanel.hidden=true;camera.reset();game.setReady(key==='si'&&!!models.current.idle.leek&&!models.current.idle.transition&&!models.current.idle.reverse?.landing);showStatus(`${character.name} · 載入完成`);
       climb.setReady(next==='climb'&&key==='si'&&models.current.idle.supported);
+      raft.setReady(next==='raft'&&key==='si'&&models.current.idle.supported);
     }else await loadModel(`${import.meta.env.BASE_URL}${character.path}`,character.name,true,key);
   }
   game=new RhythmGame(document.querySelector('#game-root'),viewerConfig.game,{
@@ -296,13 +306,15 @@ try {
     exit:()=>selectZone('hub'),view:()=>selectZone(lastViewerZone),
   });
   escapeGame=new EscapeGame(document.querySelector('#escape-root'),new EscapeStage(scene,camera,models,escapeLevels[0]),{exit:()=>selectZone('hub')});
+  raft=new RaftGame(document.querySelector('#raft-root'),new RaftStage(scene,camera,models),{exit:()=>selectZone('hub')});
   for(const button of document.querySelectorAll('#game-hub [data-open]'))button.addEventListener('click',()=>selectZone(button.dataset.open));
   for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.addEventListener('click',()=>selectZone(button.dataset.zone));
-  zoneHashListener=()=>{const next=location.hash.slice(1);if(next!==zone&&['si','zhuang','hub','game','climb','escape'].includes(next))selectZone(next);};
+  zoneHashListener=()=>{const next=location.hash.slice(1);if(next!==zone&&['si','zhuang','hub','game','climb','escape','raft'].includes(next))selectZone(next);};
   window.addEventListener('hashchange',zoneHashListener);
   observer.observe(document.querySelector('#game-chart'));
   resize();
   scene.start((delta) => {
+    if(zone==='raft'){raft.update(delta);theater.update(null,delta);comics.update(delta,scene.camera,null,null,true);return;}
     if(zone==='hub'){theater.update(null,delta);scene.scene.background=background;comics.update(delta,scene.camera,null,null,true);return;}
     if(zone==='escape'){
       escapeGame.update(delta);theater.update(null,delta);scene.scene.background=background;
@@ -366,7 +378,7 @@ try {
     finally { URL.revokeObjectURL(url); }
   });
   document.querySelector('#retry-model').addEventListener('click',()=>{if(graphicsLost){location.reload();return;}const key=zone==='zhuang'?'zhuang':'si',c=viewerConfig.characters[key];loadModel(`${import.meta.env.BASE_URL}${c.path}`,c.name,true,key);});
-  selectZone(['si','zhuang','hub','game','climb','escape'].includes(location.hash.slice(1))?location.hash.slice(1):'si');
+  selectZone(['si','zhuang','hub','game','climb','escape','raft'].includes(location.hash.slice(1))?location.hash.slice(1):'si');
 } catch (error) {
   console.error(error);
   showStatus('無法啟動 WebGL 3D 顯示。請使用支援 WebGL 的 Safari／Chrome／Edge，並確認硬體加速可用。', true);
@@ -384,6 +396,7 @@ window.addEventListener('pagehide', (event) => {
   game?.dispose();
   climb?.dispose();
   escapeGame?.dispose();
+  raft?.dispose();
   window.removeEventListener('hashchange',zoneHashListener);
   observer?.disconnect();
   gazePointer?.dispose();
