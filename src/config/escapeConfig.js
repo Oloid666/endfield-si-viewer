@@ -6,7 +6,7 @@ const common = { ...climbConfig, actorHeight:1.2, moveSeconds:.25, wasteEnabled:
 
 export const escapeLevels = [
   { ...common, id:'push', name:'① 推箱爬塔', tag:'祀不宜遲', width:11,
-    start:{x:0,y:1},exit:{x:10,y:6},columns:[1,1,1,1,3,3,3,3,5,6,6],
+    start:{x:0,y:1},exit:{x:10,y:6},columns:[1,1,1,1,3,3,3,3,5,6,6],difficulty:1,short:'推箱教學',timeLimit:150,
     crates:[{id:'step-a',x:2,y:1},{id:'step-b',x:6,y:3}],
     intro:'你到武陵找莊方宜，卻趁空檔偷溜去找小蔥。莊突然提早回來了！搬動亮框息壤搭階梯，趕回落腳處裝作一直都在。',
     hint:'開「搬箱」後按方向鍵推拉；關掉搬箱，再按方向鍵踩上方塊。兩格高牆需要先搭階梯。',
@@ -15,7 +15,7 @@ export const escapeLevels = [
     replies:['祀：「管理員，這塊往哪裡推？」\n莊方宜：「……風景會叫你管理員？」','莊方宜：「研究完，回來當面報告。」\n呱嘎 OS：現在開始研究藉口還來得及嗎？'],
     ending:'呱嘎翻進門，立刻坐好。\n莊方宜：「等很久了？」\n呱嘎：「剛到……不是，一直都在。」\n鏡頭往下：腳上還沾著息壤。' },
   { ...common,id:'cover',name:'② 侵蝕鋪路',tag:'息壤一下',width:9,
-    start:{x:0,y:1},exit:{x:8,y:3},columns:[1,1,1,1,1,1,2,3,3],
+    start:{x:0,y:1},exit:{x:8,y:3},columns:[1,1,1,1,1,1,2,3,3],difficulty:2,short:'侵蝕鋪路',
     crates:[{id:'cover-a',x:2,y:1}],hazards:[{x:4,y:1,kind:'floor'}],callAt:5,
     intro:'回程捷徑被侵蝕擋住。把息壤推到紫色侵蝕上當安全墊腳石，再爬過去；想直接踩過去，呱嘎可不答應。',
     hint:'把亮框息壤往右推兩格，蓋住紫色侵蝕；關「搬箱」，踩箱通過。安全箱別再往前推走。',
@@ -24,7 +24,7 @@ export const escapeLevels = [
     replies:['莊方宜：「考察完記得回來。」\n呱嘎 OS：這是考察，也是考驗。','祀：「管理員，那是侵蝕。」\n莊方宜：「原來你們在同一塊地板上。」'],
     ending:'呱嘎衝回武陵落腳處。\n莊方宜：「鞋子留下，事情說清楚。」\n系統：通過侵蝕，未通過盤問。' },
   { ...common,id:'rope',name:'③ 繩索逃班',tag:'簽名之前',width:10,timeLimit:85,
-    start:{x:0,y:1},exit:{x:9,y:7},columns:[1,1,4,5,6,6,6,7,7,7],
+    start:{x:0,y:1},exit:{x:9,y:7},columns:[1,1,4,5,6,6,6,7,7,7],difficulty:2,short:'繩索入門',
     rope:{x:1,bottom:1,top:4},hazards:[{x:1,y:2,kind:'jet'}],fragile:{x:5,y:5},fragileSeconds:2.6,callAt:5,
     intro:'佩利卡要送文件來簽名，你卻還在武陵。先爬繩索躲過間歇侵蝕噴流，再越過會縮回的息壤平台，到接駁口回帝江號。',
     hint:'先到繩索旁，按住 ↑ 爬繩；↓ 可退回。黃光預警、紫光噴發，等噴流停再爬。橘色平台踩過會縮回。',
@@ -33,7 +33,7 @@ export const escapeLevels = [
     replies:['佩利卡：「好，我在門口等您。」\n呱嘎 OS：這句話比侵蝕還可怕。','佩利卡：「這份要親簽。麻煩您了。」\n呱嘎 OS：懂了，親自簽收逃班後果。'],
     ending:'呱嘎趕上接駁，衝回辦公室拿起筆。\n佩利卡：「謝謝。另一份電子簽名就可以。」\n呱嘎默默看向鏡頭。' },
   { ...common,id:'build',name:'④ 息壤建造',tag:'臨時工業奇蹟',width:11,stock:7,
-    start:{x:0,y:1},exit:{x:10,y:2},columns:[1,1,0,0,1,1,0,0,0,2,2],callAt:5,
+    start:{x:0,y:1},exit:{x:10,y:2},columns:[1,1,0,0,1,1,0,0,0,2,2],callAt:5,difficulty:2,short:'建造入門',
     intro:'近路斷成好幾截。你只有七塊息壤，自己放置方塊搭橋，也能切成「階梯」往上蓋。放錯了就回收，或者倒退一步。',
     hint:'朝空缺走近，按「放一塊」搭橋；「平橋／階梯」切換高度。只可回收自己放的方塊，七塊材料可以反覆使用。',
     caller:'莊方宜',call:'你說在等我，為什麼定位一直在移動？',
@@ -41,3 +41,31 @@ export const escapeLevels = [
     replies:['莊方宜：「等我需要蓋一座橋？」\n呱嘎 OS：不只一座。','祀：「管理員，你把回程路蓋反了嗎？」\n莊方宜：「原來還是集體施工。」'],
     ending:'呱嘎靠自己搭的橋回到武陵。\n莊方宜：「路修得不錯。」\n呱嘎鬆一口氣。\n莊方宜：「現在，解釋為什麼需要修路。」' },
 ];
+
+const story = escapeLevels[0], paperwork=escapeLevels[2];
+escapeLevels.push(
+  { ...common,caller:story.caller,call:story.call,choices:story.choices,replies:story.replies,ending:story.ending,
+    id:'pit',name:'⑤ 別推下去',short:'低槽死路',difficulty:3,tag:'祀前想清楚',width:8,timeLimit:90,
+    start:{x:4,y:2},exit:{x:7,y:4},columns:[2,1,2,2,2,2,4,4],crates:[{id:'critical',x:3,y:2}],callAt:5,
+    criticalCrates:[{id:'critical',minY:2}],
+    intro:'箱子在你左邊，出口卻在右邊。先想辦法繞到箱子另一側。左邊低槽會吞掉唯一的階梯，推錯真的會卡住。',
+    hint:'先觀察左右高度。箱子必須留在上層；推進低槽後無法拉回，可以退一步或重來本關。' },
+  { ...common,caller:story.caller,call:story.call,choices:story.choices,replies:story.replies,ending:'門開了，呱嘎衝回落腳處。\n莊方宜：「為什麼維修紀錄寫著，你把箱子留在機關上？」',
+    id:'plate',name:'⑥ 借位開門',short:'壓力機關',difficulty:3,tag:'箱子留下，人先走',width:10,timeLimit:90,
+    start:{x:0,y:1},exit:{x:9,y:3},columns:[1,1,1,1,1,1,1,2,3,3],crates:[{id:'weight',x:2,y:1}],callAt:7,
+    plates:[{x:3,y:1}],gates:[{x:6,y:1},{x:6,y:2},{x:6,y:3}],
+    intro:'綠色壓力板控制右側閘門，只接受息壤箱的重量。不是把箱子一路推到底；你得留下它，自己越過去。',
+    hint:'箱子在壓力板上，門才會開。離開壓力板門就關；看看能不能從箱子上越過去。' },
+  { ...common,caller:paperwork.caller,call:paperwork.call,choices:paperwork.choices,replies:paperwork.replies,ending:paperwork.ending,
+    id:'jets',name:'⑦ 雙重查勤',short:'雙噴流繩',difficulty:3,tag:'上面也在噴',width:9,timeLimit:65,
+    start:{x:0,y:1},exit:{x:8,y:8},columns:[1,1,5,6,7,7,8,8,8],rope:{x:1,bottom:1,top:5},
+    hazards:[{x:1,y:2,kind:'jet',offset:0},{x:1,y:4,kind:'jet',offset:2.4}],jet:{period:4.8,warning:.8,active:2},jetBlocks:true,
+    fragile:{x:5,y:6},fragileSeconds:1.6,callAt:5,
+    intro:'同一條繩上有兩段交錯噴流。紫光時不能爬進去，停在噴口又會累積侵蝕。過繩後，回縮平台也沒空讓你久等。',
+    hint:'黃光預警、紫光阻擋。找安全高度分段等候，再爬下一段；別一直按住 ↑ 硬衝。' },
+  { ...common,caller:paperwork.caller,call:paperwork.call,choices:paperwork.choices,replies:paperwork.replies,ending:'呱嘎把最後一塊息壤放好，趕上接駁。\n佩利卡：「材料申領單也麻煩簽一下。」\n呱嘎：還要簽？！',
+    id:'ration',name:'⑧ 三塊不夠？',short:'極限材料',difficulty:4,tag:'回收也有額度',width:11,timeLimit:110,
+    start:{x:0,y:1},exit:{x:10,y:2},columns:[1,1,0,0,1,1,0,0,0,2,2],stock:3,reclaimLimit:2,callAt:5,
+    intro:'兩段斷路，至少要放五塊，但背包只有三塊，而且只能回收兩次。先規劃帶走哪些方塊；蓋錯位置或浪費回收次數，後面真的會沒路。',
+    hint:'三塊材料、兩次回收。可按「轉身」朝後回收，跨出去前先想好；撤回能補救，重來會還原全部材料。' }
+);

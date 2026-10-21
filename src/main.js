@@ -199,7 +199,7 @@ try {
     showStatus('WebGL 繪圖連線已中斷，請重新整理頁面。', true);
     loadPanel.hidden=false;loadTitle.textContent='3D 繪圖已中斷';loadProgress.hidden=true;loadDetail.textContent='請重新整理頁面，已下載的模型可從快取讀取。';
     document.querySelector('#retry-model').textContent='重新整理頁面';
-    document.querySelectorAll('.zone-nav button,#full-body,#face-closeup,#back-view').forEach(button=>{button.disabled=true;});
+    document.querySelectorAll('.zone-nav button,#game-hub button,#full-body,#face-closeup,#back-view').forEach(button=>{button.disabled=true;});
     fileInput.disabled = true;
     reset.disabled = true;
     idleButton.disabled = true;
@@ -238,6 +238,7 @@ try {
     const header = document.querySelector('header').getBoundingClientRect();
     const panel = document.querySelector('.panel').getBoundingClientRect();
     const nav=document.querySelector('.zone-nav').getBoundingClientRect();
+    if(zone==='hub')return;
     if(zone==='escape'){
       escapeGame?.stage.frameCamera(true);return;
     }else if(zone==='climb'){
@@ -258,53 +259,51 @@ try {
   observer.observe(document.querySelector('#viewport'));
   observer.observe(document.querySelector('.panel'));
   async function selectZone(next){
-    if(graphicsLost||!['si','zhuang','game','climb','escape'].includes(next))return;
+    if(graphicsLost||!['si','zhuang','hub','game','climb','escape'].includes(next))return;
     if(game?.active)game.leave();
     if(climb?.active)climb.leave();
     if(escapeGame?.active)escapeGame.leave();
     if(hiddenEscapeModel){hiddenEscapeModel.group.visible=hiddenEscapeModel.visible;hiddenEscapeModel=null;}
     ++requestId;models.cancelLoad();models.stopGesture();actionPanel.cancel();dialogue.cancel();photography.reset();camera.story=null;
-    zone=next;if(!['game','climb','escape'].includes(next))lastViewerZone=next;
+    zone=next;if(!['hub','game','climb','escape'].includes(next))lastViewerZone=next;
     document.querySelector('#app').dataset.zone=next;
+    document.querySelector('#game-hub').hidden=next!=='hub';
     history.replaceState(null,'',`#${next}`);
-    for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.setAttribute('aria-pressed',String(button.dataset.zone===next||(['climb','escape'].includes(next)&&button.dataset.zone==='game')));
+    for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.setAttribute('aria-pressed',String(button.dataset.zone===next||(['game','climb','escape'].includes(next)&&button.dataset.zone==='hub')));
     document.querySelector('#face-panel').hidden=next==='zhuang';document.querySelector('#action-section').hidden=next==='zhuang';
-    camera.controls.enabled=!['game','climb','escape'].includes(next);setPanelExpanded(false);cameraMode=['game','climb','escape'].includes(next)?next:'full';
-    if(next==='escape'){
+    camera.controls.enabled=!['hub','game','climb','escape'].includes(next);setPanelExpanded(false);cameraMode=['hub','game','climb','escape'].includes(next)?next:'full';
+    if(next==='escape'||next==='hub'){
       if(models.current){hiddenEscapeModel={group:models.current.group,visible:models.current.group.visible};models.current.group.visible=false;}
-      loadPanel.hidden=true;escapeGame.enter();resize();return;
+      loadPanel.hidden=true;camera.stopShoeOrbit();if(next==='escape')escapeGame.enter();resize();return;
     }
     if(next==='game')game.enter();
     if(next==='climb')climb.enter();
     const key=next==='zhuang'?'zhuang':'si',character=viewerConfig.characters[key];
     resize();
     if(models.current?.characterId===key){
-      loadPanel.hidden=true;camera.reset();game.setReady(key==='si'&&!!models.current.idle.leek);showStatus(`${character.name} · 載入完成`);
+      loadPanel.hidden=true;camera.reset();game.setReady(key==='si'&&!!models.current.idle.leek&&!models.current.idle.transition&&!models.current.idle.reverse?.landing);showStatus(`${character.name} · 載入完成`);
       climb.setReady(next==='climb'&&key==='si'&&models.current.idle.supported);
     }else await loadModel(`${import.meta.env.BASE_URL}${character.path}`,character.name,true,key);
   }
   game=new RhythmGame(document.querySelector('#game-root'),viewerConfig.game,{
-    exit:()=>selectZone(lastViewerZone),
+    exit:()=>selectZone('hub'),
     start:()=>{const ok=gameStage.start(scene.camera.position);if(ok){camera.showStage(models.current.bounds);resize();}return ok;},
     frame:(time,phase)=>{gameStage.prepare(time,phase);if(phase!==game.lastShot){game.lastShot=phase;camera.showStage(phase==='reverse'?models.getReverseBounds():models.current.bounds,true);}},
     stop:()=>{gameStage.stop();game.lastShot=null;},
     hit:(side,result,time)=>gameStage.hit(side,result,time),
   });
   climb=new ClimbGame(document.querySelector('#climb-root'),new ClimbStage(scene,camera,models,climbConfig),climbConfig,{
-    exit:()=>selectZone('game'),view:()=>selectZone(lastViewerZone),
+    exit:()=>selectZone('hub'),view:()=>selectZone(lastViewerZone),
   });
-  escapeGame=new EscapeGame(document.querySelector('#escape-root'),new EscapeStage(scene,camera,models,escapeLevels[0]),{exit:()=>selectZone('game')});
-  const escapeLink=document.createElement('button');escapeLink.id='escape-link';escapeLink.textContent='呱嘎管理員 · 四種玩法 →';
-  escapeLink.addEventListener('click',()=>selectZone('escape'));document.querySelector('#game-card .actions').prepend(escapeLink);
-  const climbLink=document.createElement('button');climbLink.id='climb-link';climbLink.textContent='新試玩：查勤爬塔 →';
-  climbLink.addEventListener('click',()=>selectZone('climb'));
-  document.querySelector('#game-card .actions').prepend(climbLink);
+  escapeGame=new EscapeGame(document.querySelector('#escape-root'),new EscapeStage(scene,camera,models,escapeLevels[0]),{exit:()=>selectZone('hub')});
+  for(const button of document.querySelectorAll('#game-hub [data-open]'))button.addEventListener('click',()=>selectZone(button.dataset.open));
   for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.addEventListener('click',()=>selectZone(button.dataset.zone));
-  zoneHashListener=()=>{const next=location.hash.slice(1);if(next!==zone&&['si','zhuang','game','climb','escape'].includes(next))selectZone(next);};
+  zoneHashListener=()=>{const next=location.hash.slice(1);if(next!==zone&&['si','zhuang','hub','game','climb','escape'].includes(next))selectZone(next);};
   window.addEventListener('hashchange',zoneHashListener);
   observer.observe(document.querySelector('#game-chart'));
   resize();
   scene.start((delta) => {
+    if(zone==='hub'){theater.update(null,delta);scene.scene.background=background;comics.update(delta,scene.camera,null,null,true);return;}
     if(zone==='escape'){
       escapeGame.update(delta);theater.update(null,delta);scene.scene.background=background;
       comics.update(delta,scene.camera,null,null,true);return;
@@ -367,7 +366,7 @@ try {
     finally { URL.revokeObjectURL(url); }
   });
   document.querySelector('#retry-model').addEventListener('click',()=>{if(graphicsLost){location.reload();return;}const key=zone==='zhuang'?'zhuang':'si',c=viewerConfig.characters[key];loadModel(`${import.meta.env.BASE_URL}${c.path}`,c.name,true,key);});
-  selectZone(['si','zhuang','game','climb','escape'].includes(location.hash.slice(1))?location.hash.slice(1):'si');
+  selectZone(['si','zhuang','hub','game','climb','escape'].includes(location.hash.slice(1))?location.hash.slice(1):'si');
 } catch (error) {
   console.error(error);
   showStatus('無法啟動 WebGL 3D 顯示。請使用支援 WebGL 的 Safari／Chrome／Edge，並確認硬體加速可用。', true);

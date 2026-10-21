@@ -4,15 +4,16 @@ import { EscapeEngine } from '../src/game/EscapeEngine.js';
 import { escapeLevels } from '../src/config/escapeConfig.js';
 import { GuaguaActor } from '../src/game/GuaguaActor.js';
 import { Vector3 } from 'three';
+import { escapeRoutes as routes } from './escapeRoutes.js';
+import { unlockAudio } from '../src/game/unlockAudio.js';
 
-const routes={push:['r','c','r','c','r','r','r','c','r','c','r','r','r','r'],cover:['r','c','r','r','c','r','r','r','r','r'],rope:['r','u','u','u','r','r','r','r','r','r','r','r'],build:['r','p','r','p','r','r','r','p','r','p','r','p','r','r','r']};
-function action(e,a){e.update(.3);if(a==='r')return e.move(1);if(a==='l')return e.move(-1);if(a==='c')e.toggleCarry();if(a==='u')return e.climb();if(a==='p')return e.place();}
+function action(e,a){e.update(.3);if(a==='r')return e.move(1);if(a==='l')return e.move(-1);if(a==='c')e.toggleCarry();if(a==='u')return e.climb();if(a==='p')return e.place();if(a==='t')e.player.facing*=-1;if(a==='k')return e.reclaim();}
 function resume(e){e.chooseAnswer('honest');e.finishCall();}
 function fresh(id){const e=new EscapeEngine(escapeLevels.find(c=>c.id===id));e.start();return e;}
 
 for(const c of escapeLevels)test(`${c.id}: authored route wins with its intended mechanic and a paused check-in`,()=>{
   const e=fresh(c.id);let calls=0;
-  for(const a of routes[c.id]){action(e,a);if(e.state==='call'){calls++;const time=e.elapsed;e.update(100);assert.equal(e.elapsed,time);resume(e);}}
+  for(const a of routes[c.id]){let result=action(e,a);for(let i=0;result?.kind==='blocked'&&a==='u'&&i<20;i++)result=action(e,a);if(e.state==='call'){calls++;const time=e.elapsed;e.update(100);assert.equal(e.elapsed,time);resume(e);}}
   assert.equal(e.state,'won');assert.equal(calls,1);assert.equal(e.player.x,c.exit.x);assert.equal(e.player.y,c.exit.y);
   if(c.id==='build'){assert.equal(e.buildCount,5);assert.equal(e.inventory,2);}
   const snapshot=e.snapshot();e.update(100);assert.deepEqual(e.snapshot(),snapshot);assert.equal(e.move(-1),null);
@@ -56,4 +57,48 @@ test('penguin actor reacts without a GLB and disposes its owned geometry/materia
   const actor=new GuaguaActor();actor.update(new Vector3(1,2,0),1,2,.8,'rope','playing');assert.equal(actor.root.position.y,2);assert(Math.abs(actor.wings[0].rotation.x)>1);
   let disposed=0;for(const resource of [actor.sphere,actor.beakGeometry,...actor.materials])resource.addEventListener('dispose',()=>disposed++);
   actor.dispose();assert.equal(disposed,6);assert.equal(actor.root.parent,null);
+});
+
+test('pressure gate opens only for a crate on its plate and undo restores the closed gate',()=>{
+ const e=fresh('plate');assert(e.blockAt(6,1));action(e,'r');action(e,'c');action(e,'r');assert(e.gateOpen);assert.equal(e.blockAt(6,1),undefined);
+ e.update(.3);assert(e.undo());assert(!e.gateOpen);assert.equal(e.blockAt(6,1)?.kind,'gate');
+ e.player={x:3,y:1,facing:1};e.syncGates();assert(!e.gateOpen,'a lightweight penguin is not a crate');
+ e.blocks.find(b=>b.kind==='crate').x=5;e.player={x:4,y:1,facing:1};e.carry=false;e.syncGates();
+ assert.equal(action(e,'r').kind,'climb');assert.equal(action(e,'r').kind,'blocked','one crate cannot bypass the closed gate');
+});
+test('limited recycling quota is consumed, enforced, restored by undo and reset on replay',()=>{
+ const e=fresh('ration');action(e,'r');action(e,'p');e.update(.3);assert.equal(e.reclaim().kind,'reclaim');assert.equal(e.remainingReclaims,1);
+ action(e,'p');e.update(.3);assert.equal(e.reclaim().kind,'reclaim');assert.equal(e.remainingReclaims,0);
+ action(e,'p');e.update(.3);assert.equal(e.reclaim().kind,'blocked');e.update(.3);assert(e.undo());assert.equal(e.remainingReclaims,0);
+ e.update(.3);assert(e.undo());assert.equal(e.remainingReclaims,1);e.start();assert.equal(e.inventory,3);assert.equal(e.remainingReclaims,2);
+});
+test('staggered jets have distinct phases and hard mode blocks climbing into an active jet',()=>{
+ const e=fresh('jets');action(e,'r');e.clock=1;e.lastMoveAt=-Infinity;
+ assert.notEqual(e.hazardPhase(e.config.hazards[0]),e.hazardPhase(e.config.hazards[1]));
+ assert.equal(e.climb().kind,'blocked');assert.equal(e.player.y,1);
+ e.clock=3;e.lastMoveAt=-Infinity;assert.equal(e.climb().kind,'rope');
+});
+test('a wrong push creates a genuine structural dead end, with undo and restart recovery',()=>{
+ const e=fresh('pit');action(e,'c');action(e,'l');action(e,'l');assert(e.deadlockHint.includes('低槽'));
+ const sunk=e.snapshot();
+ // Explore every reachable position/carry/crate state, excluding undo/restart.
+ // This proves the authored mistake cannot still reach the exit by normal moves.
+ const queue=[sunk],visited=new Set();let solved=false;
+ for(let i=0;i<queue.length;i++){
+   const s=queue[i],key=JSON.stringify([s.player.x,s.player.y,s.carry,s.blocks.filter(b=>b.kind==='crate').map(b=>[b.x,b.y])]);
+   if(visited.has(key))continue;visited.add(key);
+   for(const a of ['r','l','c']){
+     const branch=fresh('pit');branch.restore(s);branch.called=true;branch.clock=100;branch.lastMoveAt=-Infinity;
+     action(branch,a);if(branch.state==='won')solved=true;else queue.push(branch.snapshot());
+   }
+   assert(visited.size<1000,'finite small puzzle search');
+ }
+ assert(visited.size>1);assert.equal(solved,false);
+ e.update(.3);assert(e.undo());assert.equal(e.deadlockHint,'');e.start();assert.equal(e.blocks.find(b=>b.id==='critical').x,3);assert.equal(e.blocks.find(b=>b.id==='critical').y,2);
+});
+test('audio unlock is bounded when Safari resume never settles, rejects or is absent',async()=>{
+ assert.equal(await unlockAudio({state:'suspended',resume:()=>new Promise(()=>{})},15),false);
+ assert.equal(await unlockAudio({state:'suspended',resume:()=>Promise.reject(new Error('blocked'))},15),false);
+ assert.equal(await unlockAudio(null,15),false);
+ const audio={state:'suspended',resume(){this.state='running';return Promise.resolve();}};assert.equal(await unlockAudio(audio,15),true);
 });
