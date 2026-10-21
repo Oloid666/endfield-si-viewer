@@ -1,16 +1,18 @@
 import { escapeLevels } from '../config/escapeConfig.js';
 import { EscapeEngine } from './EscapeEngine.js';
+import { escapeMap } from './EscapeMap.js';
 
 export class EscapeGame {
   constructor(root,stage,hooks){
-    this.root=root;this.stage=stage;this.hooks=hooks;this.active=false;this.available=true;this.selected=0;this.completed=new Set();this.held=0;
-    this.engine=new EscapeEngine(escapeLevels[0]);
+    this.root=root;this.stage=stage;this.hooks=hooks;this.active=false;this.available=true;
+    this.selected=Math.max(0,escapeLevels.findIndex(c=>c.id===new URLSearchParams(window.location.search).get('level')));
+    this.completed=new Set();this.held=0;this.engine=new EscapeEngine(escapeLevels[this.selected]);
     root.innerHTML=`<label class="escape-levels">選關 <select id="escape-level-select" aria-label="選擇測試關卡">${escapeLevels.map((c,i)=>`<option value="${i}">${c.name} · ${'★'.repeat(c.difficulty)}</option>`).join('')}</select></label>
       <div class="escape-hud"><div><small id="escape-difficulty">爬塔－測試中</small><h2 id="escape-title"></h2></div><div class="escape-top-actions"><button id="escape-restart">↻ 重來本關</button><button id="escape-pause">Ⅱ 暫停</button></div></div>
       <div class="escape-meters"><span id="escape-time"></span><span id="escape-progress"></span><span id="escape-stock"></span><label id="escape-corruption-label" hidden>侵蝕 <meter id="escape-corruption" min="0" max="100" value="0"></meter></label></div>
       <p id="escape-line" role="status" aria-live="polite"></p>
-      <div class="escape-controls"><p id="escape-hint"></p><div class="escape-tools"><button data-action="climb" id="escape-up">↑ 爬繩<small>按住 / W</small></button><button data-action="down" id="escape-down">↓ 下繩<small>S / ↓</small></button><button data-action="place" id="escape-place">＋ 放一塊<small>E</small></button><button data-action="reclaim" id="escape-reclaim">－ 回收<small>R</small></button><button data-action="rise" id="escape-rise">平橋<small>Q 切換階梯</small></button><button data-action="turn" id="escape-turn">↔ 轉身<small>F 朝向後方</small></button></div><div class="escape-buttons"><button data-action="left">←<small>A / ←</small></button><button data-action="carry" id="escape-carry" aria-pressed="false">搬箱：關<small>空白鍵</small></button><button data-action="right">→<small>D / →</small></button><button data-action="undo" id="escape-undo">↶<small>Z 退一步</small></button></div></div>
-      <section class="climb-card" id="escape-card"><small id="escape-tag"></small><h3 id="escape-card-title"></h3><p id="escape-description"></p><p id="escape-result" hidden></p><div class="actions"><button id="escape-start">祀不宜遲 · 開始</button><button id="escape-next" hidden>下一種玩法 →</button><button id="escape-exit">返回遊戲區</button></div><details><summary>試作與素材說明</summary><p>呱嘎暫用本站原創企鵝簡模，非既有二創角色模型的精確重現。故事、侵蝕、回縮平台均為同人遊戲規則。只用一個場景與渲染循環。</p><p>莊方宜通訊頭像來自 <a href="https://sketchfab.com/3d-models/zhuang-fangyi-arknights-endfield-51d669eb7ef94cb49aeeaf2d9541d9de" target="_blank" rel="noopener noreferrer">Abcxyz51 的模型</a>（<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>），由本站渲染截圖。佩利卡以文字通訊出場。</p></details></section>
+      <div class="escape-controls"><p id="escape-objectives" hidden></p><p id="escape-hint"></p><div class="escape-tools"><button data-action="climb" id="escape-up">↑ 爬繩<small>按住 / W</small></button><button data-action="down" id="escape-down">↓ 下繩<small>S / ↓</small></button><button data-action="place" id="escape-place">＋ 放一塊<small>E</small></button><button data-action="reclaim" id="escape-reclaim">－ 回收<small>R</small></button><button data-action="rise" id="escape-rise">平橋<small>Q 切換階梯</small></button><button data-action="turn" id="escape-turn">↔ 轉身<small>F 朝向後方</small></button></div><div class="escape-buttons"><button data-action="left">←<small>A / ←</small></button><button data-action="carry" id="escape-carry" aria-pressed="false">搬箱：關<small>空白鍵</small></button><button data-action="right">→<small>D / →</small></button><button data-action="undo" id="escape-undo">↶<small>Z 退一步</small></button></div></div>
+      <section class="climb-card" id="escape-card"><small id="escape-tag"></small><h3 id="escape-card-title"></h3><p id="escape-description"></p><p id="escape-result" hidden></p><details id="escape-map" hidden><summary>查看全圖與箱子分工</summary><div id="escape-map-content"></div><p>黃點＝你・綠框＝出口・虛框＝收貨位・◆＝物品<br>紫色＝侵蝕・橘色＝關閉閘門；按「暫停」可再看圖。</p></details><div class="actions"><button id="escape-start">祀不宜遲 · 開始</button><button id="escape-next" hidden>下一種玩法 →</button><button id="escape-exit">返回遊戲區</button></div><details><summary>試作與素材說明</summary><p>呱嘎暫用本站原創企鵝簡模，非既有二創角色模型的精確重現。故事、侵蝕、回縮平台均為同人遊戲規則。只用一個場景與渲染循環。</p><p>莊方宜通訊頭像來自 <a href="https://sketchfab.com/3d-models/zhuang-fangyi-arknights-endfield-51d669eb7ef94cb49aeeaf2d9541d9de" target="_blank" rel="noopener noreferrer">Abcxyz51 的模型</a>（<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>），由本站渲染截圖。佩利卡以文字通訊出場。</p></details></section>
       <section class="climb-card" id="escape-call" role="dialog" aria-modal="true" aria-labelledby="escape-caller" hidden><small>通訊接入 · 關卡已暫停</small><div class="climb-caller"><img id="escape-avatar" src="${import.meta.env.BASE_URL}images/zhuang-call.png" loading="lazy" width="60" height="76" alt="莊方宜模型截圖"><span id="escape-letter" hidden>佩</span><div><h3 id="escape-caller"></h3><p id="escape-question"></p></div></div><div id="escape-answers"><button data-answer="honest"></button><button data-answer="work"></button></div><p id="escape-reply" hidden></p><button id="escape-continue" hidden>先趕回去 →</button></section>`;
     this.$=selector=>root.querySelector(selector);
     this.onClick=event=>{
@@ -103,7 +105,9 @@ export class EscapeGame {
     if(s==='won'){this.completed.add(this.selected);this.$('#escape-result').textContent=`${e.moves} 次操作 · 剩餘 ${Math.ceil(e.remaining)} 秒${c.stock?` · 放置 ${e.buildCount} 次`:''}\n\n${c.ending}`;}
     if(s==='lost')this.$('#escape-result').textContent=`${e.reason}\n\n沒祀，再來。可以先不操作，看清楚路再開始。`;
     this.$('#escape-hint').textContent=c.hint;
-    this.$('#escape-up').hidden=this.$('#escape-down').hidden=!c.rope;
+    this.$('#escape-up').hidden=this.$('#escape-down').hidden=!e.ropes.length;
+    this.$('#escape-map').hidden=!c.platforms;
+    if(c.platforms&&['idle','paused','won','lost'].includes(s))this.$('#escape-map-content').innerHTML=escapeMap(e);
     for(const id of ['place','reclaim','rise','turn'])this.$(`#escape-${id}`).hidden=!c.stock;
     this.$('#escape-carry').hidden=!c.crates.length;this.$('#escape-carry').firstChild.textContent=`搬箱：${e.carry?'開':'關'}`;this.$('#escape-carry').setAttribute('aria-pressed',String(e.carry));
     this.$('#escape-rise').firstChild.textContent=e.buildRise?'階梯':'平橋';
@@ -124,11 +128,12 @@ export class EscapeGame {
     this.$('#escape-time').textContent=e.moves?`${this.config.caller==='佩利卡'?'送件':'抵達'}倒數 ${Math.ceil(e.remaining)} 秒`:'先看好路，操作後開始計時';
     this.$('#escape-progress').textContent=`位置 ${e.player.x} · 高度 ${e.player.y}`;
     this.$('#escape-stock').textContent=this.config.stock?`息壤 ${e.inventory} / ${this.config.stock}${this.config.reclaimLimit!==undefined?` · 可回收 ${e.remainingReclaims} 次`:''}`:this.config.plates?`閘門：${e.gateOpen?'開':'關'}`:'';
-    this.$('#escape-corruption-label').hidden=!this.config.rope;this.$('#escape-corruption').value=e.corruption;
+    this.$('#escape-objectives').hidden=!e.goals.length;this.$('#escape-objectives').textContent=e.goals.map(g=>`${g.done?'✓':'○'} ${g.label}`).join(' · ');
+    this.$('#escape-corruption-label').hidden=!this.config.hazards.some(h=>h.kind==='jet');this.$('#escape-corruption').value=e.corruption;
     this.root.dataset.jet=e.jetPhase;
     this.root.dataset.stuck=String(!!e.deadlockHint);
     if(e.deadlockHint&&this.state==='playing'){this.$('#escape-line').textContent=e.deadlockHint;return;}
-    if(this.state==='playing'&&e.clock>=this.messageUntil)this.$('#escape-line').textContent=this.config.rope?(e.jetPhase==='active'?'侵蝕噴流！避開繩索中段。':e.jetPhase==='warning'?'黃光預警：先看好時機。':'噴流停了，趁現在爬！'):this.config.stock?'呱嘎：路沒有，就自己蓋。先看淡綠色預覽格。':'呱嘎：祀不宜遲，但也不能亂推。';
+    if(this.state==='playing'&&e.clock>=this.messageUntil)this.$('#escape-line').textContent=this.config.hazards.some(h=>h.kind==='jet')?(e.jetPhase==='active'?'侵蝕噴流！避開繩索中段。':e.jetPhase==='warning'?'黃光預警：先看好時機。':'噴流停了，趁現在爬！'):e.goals.length?(e.goals.every(g=>g.done)?'任務完成，回到綠框出口。':'先完成下方任務。按暫停可看全圖，想好回程再出發。'):this.config.stock?'呱嘎：路沒有，就自己蓋。先看淡綠色預覽格。':'呱嘎：祀不宜遲，但也不能亂推。';
   }
   leave(){this.held=0;this.active=false;this.root.hidden=true;this.$('#escape-call').hidden=true;this.stage.detach();}
   dispose(){this.leave();this.stage.dispose();this.root.removeEventListener('click',this.onClick);this.root.removeEventListener('pointerdown',this.onPointer);window.removeEventListener('pointerup',this.onRelease);window.removeEventListener('pointercancel',this.onRelease);window.removeEventListener('blur',this.onRelease);document.removeEventListener('keydown',this.onKey);document.removeEventListener('keyup',this.onKeyUp);document.removeEventListener('visibilitychange',this.onHidden);}

@@ -7,14 +7,14 @@ import { Vector3 } from 'three';
 import { escapeRoutes as routes } from './escapeRoutes.js';
 import { unlockAudio } from '../src/game/unlockAudio.js';
 
-function action(e,a){e.update(.3);if(a==='r')return e.move(1);if(a==='l')return e.move(-1);if(a==='c')e.toggleCarry();if(a==='u')return e.climb();if(a==='p')return e.place();if(a==='t')e.player.facing*=-1;if(a==='k')return e.reclaim();}
+function action(e,a){e.update(.3);if(a==='r')return e.move(1);if(a==='l')return e.move(-1);if(a==='c')e.toggleCarry();if(a==='u')return e.climb();if(a==='d')return e.climb(-1);if(a==='p')return e.place();if(a==='t')e.player.facing*=-1;if(a==='k')return e.reclaim();}
 function resume(e){e.chooseAnswer('honest');e.finishCall();}
 function fresh(id){const e=new EscapeEngine(escapeLevels.find(c=>c.id===id));e.start();return e;}
 
-for(const c of escapeLevels)test(`${c.id}: authored route wins with its intended mechanic and a paused check-in`,()=>{
+for(const c of escapeLevels)test(`${c.id}: authored route wins; any check-in pauses play`,()=>{
   const e=fresh(c.id);let calls=0;
   for(const a of routes[c.id]){let result=action(e,a);for(let i=0;result?.kind==='blocked'&&a==='u'&&i<20;i++)result=action(e,a);if(e.state==='call'){calls++;const time=e.elapsed;e.update(100);assert.equal(e.elapsed,time);resume(e);}}
-  assert.equal(e.state,'won');assert.equal(calls,1);assert.equal(e.player.x,c.exit.x);assert.equal(e.player.y,c.exit.y);
+  assert.equal(e.state,'won');assert.equal(calls,Number(Number.isFinite(c.callAt)));assert.equal(e.player.x,c.exit.x);assert.equal(e.player.y,c.exit.y);
   if(c.id==='build'){assert.equal(e.buildCount,5);assert.equal(e.inventory,2);}
   const snapshot=e.snapshot();e.update(100);assert.deepEqual(e.snapshot(),snapshot);assert.equal(e.move(-1),null);
 });
@@ -101,4 +101,55 @@ test('audio unlock is bounded when Safari resume never settles, rejects or is ab
  assert.equal(await unlockAudio({state:'suspended',resume:()=>Promise.reject(new Error('blocked'))},15),false);
  assert.equal(await unlockAudio(null,15),false);
  const audio={state:'suspended',resume(){this.state='running';return Promise.resolve();}};assert.equal(await unlockAudio(audio,15),true);
+});
+
+test('warehouse exit requires the designated cargo, not just the penguin or another box',()=>{
+ const e=fresh('warehouse');e.player={x:9,y:4,facing:1};action(e,'r');assert.equal(e.state,'playing');assert.equal(e.goals[0].done,false);
+ const cargo=e.blocks.find(b=>b.id==='cargo');cargo.x=9;cargo.y=4;action(e,'l');action(e,'r');assert.equal(e.state,'won');
+});
+test('vault pickup seals the upper route; undo restores the item and open route, replay clears all goals',()=>{
+ const e=fresh('vault');assert(!e.blockAt(6,5));e.player={x:7,y:5,facing:1};action(e,'r');
+ assert.deepEqual(e.collected,['file']);assert.equal(e.blockAt(6,5)?.kind,'gate');assert(e.deadlockHint.includes('回程'));
+ e.update(.3);assert(e.undo());assert.deepEqual(e.collected,[]);assert(!e.blockAt(6,5));
+ e.player={x:10,y:2,facing:1};action(e,'d');assert(e.collected.includes('receipt'),'descending also collects the item');
+ e.start();assert.deepEqual(e.collected,[]);assert(!e.blockAt(6,5));assert(e.goals.every(g=>!g.done));
+});
+test('both ropes support sideways entry without a free climb and allow independent descent',()=>{
+ const e=fresh('vault');action(e,'r');assert.equal(e.player.y,1);assert(e.onRope);
+ e.player={x:9,y:5,facing:1};action(e,'r');assert.equal(e.player.y,5);assert(e.onRope);action(e,'d');assert.equal(e.player.y,4);
+ e.update(.4);assert.equal(e.player.y,4);assert.equal(e.player.x,10);
+});
+test('unloading opens the gate only with the electric box; a premature bridge prevents the delivery',()=>{
+ const e=fresh('unload');for(const a of routes.unload.slice(0,6))action(e,a);
+ assert.equal(e.blocks.find(b=>b.id==='weight').y,1);assert(e.gateOpen);assert.equal(e.blocks.find(b=>b.id==='stair').y,4);
+ e.start();for(const a of 'r r r r r p'.split(' '))action(e,a);
+ assert(e.deadlockHint.includes('橋蓋早'));assert.equal(e.remainingReclaims,0);assert.equal(e.inventory,0);
+ e.update(.3);assert(e.undo());assert.equal(e.deadlockHint,'');assert.equal(e.inventory,1);
+ e.blocks.find(b=>b.id==='stair').x=7;e.blocks.find(b=>b.id==='stair').y=1;e.syncGates();assert(!e.gateOpen,'the wrong box cannot power this gate');
+});
+
+// Exhaustively check authored traps, including climbing, turning, placing,
+// pulling and collecting. Hints alone are not proof of a real puzzle dead end.
+function canEscapeWithoutUndo(engine){
+ const queue=[engine.snapshot()],seen=new Set();
+ for(let i=0;i<queue.length;i++){
+  const s=queue[i],key=JSON.stringify([s.player,s.carry,s.inventory,s.reclaimsUsed,s.collected,
+    s.blocks.filter(b=>['crate','built'].includes(b.kind)).map(b=>[b.id,b.x,b.y])]);
+  if(seen.has(key))continue;seen.add(key);assert(seen.size<20000,'bounded authored puzzle');
+  for(const a of ['r','l','c','u','d',...(engine.config.stock?['p','k','t']:[])]){
+   const e=new EscapeEngine(engine.config);e.start();e.restore(s);e.called=true;action(e,a);
+   if(e.state==='won')return true;queue.push(e.snapshot());
+  }
+ }
+ return false;
+}
+test('taking the file without paving a return path is an actual dead end',()=>{
+ const e=fresh('vault');for(const a of 'r u u u u r r r r r r r'.split(' '))action(e,a);
+ assert(e.collected.includes('file'));assert(e.deadlockHint);assert.equal(canEscapeWithoutUndo(e),false);
+ e.start();for(const a of routes.vault)action(e,a);assert.equal(e.state,'won');
+});
+test('building before unloading is an actual dead end, not just a warning',()=>{
+ const e=fresh('unload');for(const a of 'r r r r r p'.split(' '))action(e,a);
+ assert(e.deadlockHint);assert.equal(canEscapeWithoutUndo(e),false);
+ e.start();for(const a of routes.unload)action(e,a);assert.equal(e.state,'won');
 });

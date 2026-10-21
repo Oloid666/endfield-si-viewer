@@ -69,3 +69,36 @@ escapeLevels.push(
     intro:'兩段斷路，至少要放五塊，但背包只有三塊，而且只能回收兩次。先規劃帶走哪些方塊；蓋錯位置或浪費回收次數，後面真的會沒路。',
     hint:'三塊材料、兩次回收。可按「轉身」朝後回收，跨出去前先想好；撤回能補救，重來會還原全部材料。' }
 );
+
+// Expert maps change the route and objectives, rather than repeating a tutorial
+// with a shorter timer. Upper platforms leave a full corridor underneath.
+escapeLevels.push(
+  { ...common,id:'warehouse',name:'⑨ 地下先通電',short:'雙層貨運',difficulty:4,tag:'人到了，貨呢？',width:11,timeLimit:150,callAt:Infinity,
+    start:{x:0,y:1},exit:{x:10,y:4},columns:Array(11).fill(1),
+    platforms:Array.from({length:9},(_,i)=>({x:i+2,y:3})),rope:{x:1,bottom:1,top:4},
+    crates:[{id:'power',x:2,y:1,label:'電'},{id:'cargo',x:3,y:4,label:'貨'}],
+    plates:[{x:4,y:1,label:'電'}],gates:[{x:7,y:4},{x:7,y:5},{x:7,y:6}],
+    deliveries:[{crate:'cargo',x:9,y:4,label:'貨箱送到上層收貨框'}],
+    criticalCrates:[{id:'cargo',minY:4}],
+    intro:'上層貨道沒通電，電源機關卻在地下。電箱必須留下壓住機關，人再折返爬繩，把另一個「貨」箱送進上層右側收貨框。只把自己送到門口不算完成。',
+    hint:'地下「電」箱壓住綠板 → 折返左繩上樓 → 運「貨」箱。收貨框在上層出口左一格；兩個箱子不能拿錯用途。',
+    caller:'莊方宜',ending:'莊方宜：「貨已簽收。順便問一下，你為什麼從地下鑽出來？」\n呱嘎：這叫物流，不叫偷溜。' },
+  { ...common,id:'vault',name:'⑩ 密件拿了，路封了',short:'封路折返',difficulty:5,tag:'先想好怎麼回來',width:11,timeLimit:170,callAt:Infinity,
+    start:{x:0,y:1},exit:{x:0,y:1},columns:Array(11).fill(1),
+    platforms:Array.from({length:8},(_,i)=>({x:i+2,y:4})),ropes:[{x:1,bottom:1,top:5},{x:10,bottom:1,top:5}],
+    crates:[{id:'cover',x:3,y:1,label:'墊'}],hazards:[{x:5,y:1,kind:'floor'}],
+    circuits:[{unlessTokens:['file'],gates:[{x:6,y:5},{x:6,y:6},{x:6,y:7}]}],
+    pickups:[{id:'file',x:8,y:5,label:'上層密件'},{id:'receipt',x:10,y:1,label:'右下簽收章'}],
+    intro:'出口就在起點，但要先取回上層密件和右下簽收章。拿走密件，上層回程門立刻關閉，只能從右繩下樓，走有侵蝕的地下回來。出發前不處理回程，真的會被困在另一側。',
+    hint:'先處理地下侵蝕，再上左繩取件。密件會封住上層回路；從右繩下去拿章，最後回到最左端綠門。',
+    caller:'佩利卡',ending:'佩利卡：「謝謝管理員。兩樣都帶回來了。」\n呱嘎：還有我本人，這個比較難帶回來。' },
+  { ...common,id:'unload',name:'⑪ 先卸貨，後搭橋',short:'雙箱分工',difficulty:5,tag:'蓋太早也是錯',width:13,timeLimit:180,callAt:Infinity,
+    start:{x:1,y:4},exit:{x:12,y:6},columns:[4,1,1,1,1,1,1,1,1,1,1,6,6],
+    platforms:[1,2,3,4,5,6,8,9,10].map(x=>({x,y:3})),stock:1,reclaimLimit:0,
+    crates:[{id:'stair',x:2,y:4,label:'梯'},{id:'weight',x:5,y:4,label:'電'}],
+    plates:[{x:7,y:1,crate:'weight',label:'電'}],gates:[{x:9,y:4},{x:9,y:5},{x:9,y:6}],
+    criticalCrates:[{id:'stair',minY:4}],deliveries:[{crate:'stair',x:10,y:4,label:'梯箱送到右側高牆下'}],
+    intro:'唯一的建材能補中間的橋，但先蓋橋，電箱就掉不到地下機關。先越過「梯」箱，把「電」箱推下卸貨井開門，再搭橋，折返把梯箱送到右側高牆。橋不能回收，兩箱也不能交換用途。',
+    hint:'梯箱先別動。先讓電箱落進中間卸貨井，再用唯一材料補橋；回頭搬梯箱過橋，最後關搬箱踩梯箱爬高牆。',
+    caller:'莊方宜',ending:'莊方宜：「這次順序對了。」\n呱嘎：「我一直都很有規劃。」\n系統：已忽略前面重來的次數。' }
+);

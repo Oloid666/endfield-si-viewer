@@ -208,3 +208,7 @@ header { top: calc(74px + env(safe-area-inset-top)); } #character-name { font-we
 .escape-top-actions { display:flex;gap:5px; }.escape-top-actions button { min-height:44px;padding:7px 8px;font-size:12px;white-space:nowrap; }
 #escape-root[data-stuck="true"] #escape-line { color:#ffcfaa;border-left-color:#e6a46b;background:#382b23ee; }
 @media(max-height:500px) { .escape-hud { right:49%; }.escape-hud small { display:block;font-size:9px; }.escape-hud h2 { font-size:15px; }.escape-top-actions button { font-size:10px;padding:5px; }.escape-tools button { padding:6px 4px;font-size:11px; }#escape-level-select { min-height:36px; }#game-hub > div { width:min(480px,100%);padding:12px 18px; }#game-hub h2 { font-size:19px;margin:7px 0; }#game-hub button { padding:12px;margin-top:8px; }#game-hub strong { font-size:18px; }#game-audio-status { top:195px;right:48%; } }
+
+#escape-objectives { margin:0 0 5px;padding:7px 10px;background:#243c32f2;border-left:3px solid #e4d88b;color:#e8efc9;font-size:11px;line-height:1.5; }
+#escape-map-content svg { display:block;width:100%;max-height:260px;background:#142421;border:1px solid #6b8c6c; }
+@media(max-height:500px) { #escape-objectives { font-size:10px;padding:5px 8px; } #escape-map-content svg { max-height:190px; } }
