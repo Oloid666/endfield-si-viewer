@@ -1,13 +1,14 @@
 import { RhythmEngine } from './RhythmEngine.js';
+import { unlockAudio } from './unlockAudio.js';
 
 export class RhythmGame {
   constructor(root,config,hooks){
     this.root=root;this.config=config;this.hooks=hooks;this.engine=new RhythmEngine(config);this.ready=false;this.active=false;this.audioEnabled=true;this.sounds=new Set();this.token=0;
-    root.innerHTML=`<div class="game-hud"><div><small>危機合約 · 原型</small><h2>禁止停手</h2></div><p>分數 <b id="game-score">0</b><br>連擊 <b id="game-combo">0</b></p><button id="game-pause" hidden>Ⅱ 暫停</button></div>
-      <p id="game-phase">祀先甩蔥，蔥再甩祀。</p><p id="game-feedback" role="status"></p>
+    root.innerHTML=`<div class="game-hud"><div><small>危機合約 · 禁止停手</small><h2>甩蔥</h2></div><p>分數 <b id="game-score">0</b><br>連擊 <b id="game-combo">0</b></p><button id="game-pause" hidden>Ⅱ 暫停</button></div>
+      <p id="game-phase">祀先甩蔥，蔥再甩祀。</p><p id="game-feedback" role="status"></p><p id="game-audio-status" hidden></p>
       <div id="game-chart" hidden><div class="game-lane left"><span>左</span></div><div class="game-lane right"><span>右</span></div><div class="game-hitline">判定線</div></div>
       <div id="game-pads" hidden><button data-pad="left">← 左甩 <small>F / ←</small></button><button data-pad="right">右甩 → <small>J / →</small></button></div>
-      <div id="game-card"><small>節奏甩蔥 · 可玩原型</small><h3 id="game-card-title">危機合約：禁止停手</h3><p id="game-instructions">箭頭落到判定線時，按對應的左／右鍵。中場蔥會接管；按鍵規則不變。約 30 秒，自製節拍。</p><div id="game-result" hidden></div><div class="actions"><button id="game-start" disabled>正在準備祀…</button><button id="game-sound" aria-pressed="true">音效：開</button><button id="game-exit">返回看模型</button></div></div>`;
+      <div id="game-card"><small>節奏甩蔥 · 可玩原型</small><h3 id="game-card-title">節奏甩蔥</h3><p id="game-instructions">箭頭落到判定線時，按對應的左／右鍵。中場蔥會接管；按鍵規則不變。約 30 秒，自製節拍。</p><div id="game-result" hidden></div><div class="actions"><button id="game-start" disabled>正在準備祀…</button><button id="game-sound" aria-pressed="true">音效：開</button><button id="game-exit">返回遊戲選單</button></div></div>`;
     this.$=selector=>root.querySelector(selector);
     this.notes=Array.from({length:10},()=>{const note=document.createElement('b');note.className='game-note';note.hidden=true;this.$('#game-chart').append(note);return note;});
     this.onStart=()=>this.start();this.$('#game-start').addEventListener('click',this.onStart);
@@ -27,16 +28,16 @@ export class RhythmGame {
   enter(){this.active=true;this.root.hidden=false;this.root.dataset.state='idle';this.engine.reset();this.$('#game-score').textContent='0';this.$('#game-combo').textContent='0';this.$('#game-phase').textContent='祀先甩蔥，蔥再甩祀。';this.showLobby();}
   setReady(ready){this.ready=ready;if(['idle','results'].includes(this.state)){this.$('#game-start').disabled=!ready;this.$('#game-start').textContent=ready?(this.state==='results'?'再甩一次':'開始挑戰'):(this.state==='results'?'角色復位中…':'正在準備祀…');}}
   showLobby(){
-    this.$('#game-card').hidden=false;this.$('#game-card-title').textContent='危機合約：禁止停手';this.$('#game-result').hidden=true;this.$('#game-instructions').hidden=false;
+    this.$('#game-card').hidden=false;this.$('#game-card-title').textContent='節奏甩蔥';this.$('#game-result').hidden=true;this.$('#game-instructions').hidden=false;this.$('#game-audio-status').hidden=true;
     this.$('#game-chart').hidden=true;this.$('#game-pads').hidden=true;this.$('#game-pause').hidden=true;this.$('#game-feedback').textContent='';this.setReady(this.ready);
   }
   async start(){
     if(!this.active||!this.ready||this.starting)return;
     this.starting=true;const token=++this.token;
     try{
-      try{if(!this.audio){const Audio=window.AudioContext||window.webkitAudioContext;if(Audio)this.audio=new Audio();}await this.audio?.resume();}catch{/* Visual rhythm remains playable when audio is unavailable. */}
+      try{if(!this.audio){const Audio=window.AudioContext||window.webkitAudioContext;if(Audio)this.audio=new Audio();}this.useAudio=await unlockAudio(this.audio);}catch{this.useAudio=false;}
       if(!this.active||token!==this.token)return;
-      this.useAudio=this.audio?.state==='running';
+      this.$('#game-audio-status').hidden=this.useAudio;this.$('#game-audio-status').textContent='音訊未就緒，已先開始無聲挑戰。';
       if(this.state==='paused')this.engine.resume(this.now());
       else{
         if(!this.hooks.start()){this.$('#game-start').textContent='角色復位中，再按一次';return;}

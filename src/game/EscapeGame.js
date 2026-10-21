@@ -5,17 +5,16 @@ export class EscapeGame {
   constructor(root,stage,hooks){
     this.root=root;this.stage=stage;this.hooks=hooks;this.active=false;this.available=true;this.selected=0;this.completed=new Set();this.held=0;
     this.engine=new EscapeEngine(escapeLevels[0]);
-    root.innerHTML=`<div class="escape-levels" role="group" aria-label="選擇玩法">${escapeLevels.map((c,i)=>`<button data-level="${i}" aria-pressed="${i===0}">${c.name.split(' ')[0]} ${['推箱','侵蝕','繩索','建造'][i]}</button>`).join('')}</div>
-      <div class="escape-hud"><div><small>呱嘎管理員 · 四種試玩</small><h2 id="escape-title"></h2></div><button id="escape-pause">Ⅱ 暫停</button></div>
+    root.innerHTML=`<label class="escape-levels">選關 <select id="escape-level-select" aria-label="選擇測試關卡">${escapeLevels.map((c,i)=>`<option value="${i}">${c.name} · ${'★'.repeat(c.difficulty)}</option>`).join('')}</select></label>
+      <div class="escape-hud"><div><small id="escape-difficulty">爬塔－測試中</small><h2 id="escape-title"></h2></div><div class="escape-top-actions"><button id="escape-restart">↻ 重來本關</button><button id="escape-pause">Ⅱ 暫停</button></div></div>
       <div class="escape-meters"><span id="escape-time"></span><span id="escape-progress"></span><span id="escape-stock"></span><label id="escape-corruption-label" hidden>侵蝕 <meter id="escape-corruption" min="0" max="100" value="0"></meter></label></div>
       <p id="escape-line" role="status" aria-live="polite"></p>
-      <div class="escape-controls"><p id="escape-hint"></p><div class="escape-tools"><button data-action="climb" id="escape-up">↑ 爬繩<small>按住 / W</small></button><button data-action="down" id="escape-down">↓ 下繩<small>S / ↓</small></button><button data-action="place" id="escape-place">＋ 放一塊<small>E</small></button><button data-action="reclaim" id="escape-reclaim">－ 回收<small>R</small></button><button data-action="rise" id="escape-rise">平橋<small>Q 切換階梯</small></button></div><div class="escape-buttons"><button data-action="left">←<small>A / ←</small></button><button data-action="carry" id="escape-carry" aria-pressed="false">搬箱：關<small>空白鍵</small></button><button data-action="right">→<small>D / →</small></button><button data-action="undo" id="escape-undo">↶<small>Z 退一步</small></button></div></div>
+      <div class="escape-controls"><p id="escape-hint"></p><div class="escape-tools"><button data-action="climb" id="escape-up">↑ 爬繩<small>按住 / W</small></button><button data-action="down" id="escape-down">↓ 下繩<small>S / ↓</small></button><button data-action="place" id="escape-place">＋ 放一塊<small>E</small></button><button data-action="reclaim" id="escape-reclaim">－ 回收<small>R</small></button><button data-action="rise" id="escape-rise">平橋<small>Q 切換階梯</small></button><button data-action="turn" id="escape-turn">↔ 轉身<small>F 朝向後方</small></button></div><div class="escape-buttons"><button data-action="left">←<small>A / ←</small></button><button data-action="carry" id="escape-carry" aria-pressed="false">搬箱：關<small>空白鍵</small></button><button data-action="right">→<small>D / →</small></button><button data-action="undo" id="escape-undo">↶<small>Z 退一步</small></button></div></div>
       <section class="climb-card" id="escape-card"><small id="escape-tag"></small><h3 id="escape-card-title"></h3><p id="escape-description"></p><p id="escape-result" hidden></p><div class="actions"><button id="escape-start">祀不宜遲 · 開始</button><button id="escape-next" hidden>下一種玩法 →</button><button id="escape-exit">返回遊戲區</button></div><details><summary>試作與素材說明</summary><p>呱嘎暫用本站原創企鵝簡模，非既有二創角色模型的精確重現。故事、侵蝕、回縮平台均為同人遊戲規則。只用一個場景與渲染循環。</p><p>莊方宜通訊頭像來自 <a href="https://sketchfab.com/3d-models/zhuang-fangyi-arknights-endfield-51d669eb7ef94cb49aeeaf2d9541d9de" target="_blank" rel="noopener noreferrer">Abcxyz51 的模型</a>（<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>），由本站渲染截圖。佩利卡以文字通訊出場。</p></details></section>
       <section class="climb-card" id="escape-call" role="dialog" aria-modal="true" aria-labelledby="escape-caller" hidden><small>通訊接入 · 關卡已暫停</small><div class="climb-caller"><img id="escape-avatar" src="${import.meta.env.BASE_URL}images/zhuang-call.png" loading="lazy" width="60" height="76" alt="莊方宜模型截圖"><span id="escape-letter" hidden>佩</span><div><h3 id="escape-caller"></h3><p id="escape-question"></p></div></div><div id="escape-answers"><button data-answer="honest"></button><button data-answer="work"></button></div><p id="escape-reply" hidden></p><button id="escape-continue" hidden>先趕回去 →</button></section>`;
     this.$=selector=>root.querySelector(selector);
     this.onClick=event=>{
       const button=event.target.closest('button');if(!button)return;
-      if(button.dataset.level!==undefined)this.selectLevel(Number(button.dataset.level));
       if(button.dataset.action&&!['climb','down'].includes(button.dataset.action))this.input(button.dataset.action);
       if(button.dataset.action&&['climb','down'].includes(button.dataset.action)&&event.detail===0)this.input(button.dataset.action);
       if(button.dataset.answer)this.answer(button.dataset.answer);
@@ -25,6 +24,8 @@ export class EscapeGame {
     root.addEventListener('click',this.onClick);root.addEventListener('pointerdown',this.onPointer);
     window.addEventListener('pointerup',this.onRelease);window.addEventListener('pointercancel',this.onRelease);window.addEventListener('blur',this.onRelease);
     this.$('#escape-start').addEventListener('click',()=>this.start());this.$('#escape-pause').addEventListener('click',()=>this.pause());
+    this.$('#escape-restart').addEventListener('click',()=>this.restart());
+    this.onSelect=()=>this.selectLevel(Number(this.$('#escape-level-select').value));this.$('#escape-level-select').addEventListener('change',this.onSelect);
     this.$('#escape-next').addEventListener('click',()=>{this.selectLevel((this.selected+1)%escapeLevels.length);this.start();});
     this.$('#escape-exit').addEventListener('click',()=>hooks.exit());
     this.$('#escape-continue').addEventListener('click',()=>{this.engine.finishCall();this.$('#escape-call').hidden=true;this.message('呱嘎：訊號不好，我先回去再說！',3);this.render();this.$('[data-action="right"]').focus({preventScroll:true});});
@@ -35,7 +36,7 @@ export class EscapeGame {
         if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}return;
       }
       if(event.target.tagName==='BUTTON'&&['Space','Enter'].includes(event.code))return;
-      const actions={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',Space:'carry',KeyZ:'undo',ArrowUp:'climb',KeyW:'climb',ArrowDown:'down',KeyS:'down',KeyE:'place',KeyR:'reclaim',KeyQ:'rise'};
+      const actions={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',Space:'carry',KeyZ:'undo',ArrowUp:'climb',KeyW:'climb',ArrowDown:'down',KeyS:'down',KeyE:'place',KeyR:'reclaim',KeyQ:'rise',KeyF:'turn'};
       if(event.code==='Escape'){event.preventDefault();this.pause();return;}
       if(actions[event.code]){event.preventDefault();if(['climb','down'].includes(actions[event.code]))this.held=actions[event.code]==='climb'?1:-1;this.input(actions[event.code]);}
     };
@@ -54,8 +55,13 @@ export class EscapeGame {
   }
   start(){
     if(!this.active||!this.available)return;
-    if(this.state==='paused')this.engine.resume();else{this.engine.start();this.stage.move(null,this.engine);this.message(this.config.id==='rope'?'佩利卡：管理員，有份文件需要您簽名。':'祀：莊方宜說她提早到了。管理員，你確定還來得及？',4);}
+    if(this.state==='paused')this.engine.resume();else{this.restart();return;}
     this.held=0;this.render();this.$('#escape-start').blur();
+  }
+  restart(){
+    if(!this.active||!this.available)return;
+    this.held=0;this.$('#escape-call').hidden=true;this.engine.start();this.stage.setLevel(this.config);this.stage.move(null,this.engine);this.stage.frameCamera(true);
+    this.message(this.config.caller==='佩利卡'?'佩利卡：管理員，有份文件需要您簽名。':'祀：莊方宜提早到了。管理員，先想好怎麼走！',4);this.render();this.$('#escape-start').blur();this.$('#escape-restart').blur();
   }
   pause(){this.held=0;if(this.active&&this.engine.pause())this.render();}
   setAvailable(value){this.available=value;if(!value)this.pause();this.render();}
@@ -68,7 +74,8 @@ export class EscapeGame {
     else if(action==='undo'){if(e.undo()){this.stage.move(null,e);this.message('撤回剛才那件祀。查勤倒數沒有倒退。',2);}}
     else if(action==='place')result=e.place();
     else if(action==='reclaim')result=e.reclaim();
-    else if(action==='rise'&&this.config.id==='build'){e.buildRise=1-e.buildRise;this.message(e.buildRise?'階梯：在前方高一格放置息壤。':'平橋：延伸腳下這一層。',2);}
+    else if(action==='rise'&&this.config.stock){e.buildRise=1-e.buildRise;this.message(e.buildRise?'階梯：在前方高一格放置息壤。':'平橋：延伸腳下這一層。',2);}
+    else if(action==='turn'){e.player.facing*=-1;this.message('已轉身，現在可對身後放置或回收息壤。',2);}
     if(result?.kind==='blocked'){this.message(result.message,3);if(action==='climb'||action==='down')this.held=0;}
     else if(result)this.stage.move(result,e);
     if(this.state!=='playing')this.held=0;
@@ -84,17 +91,20 @@ export class EscapeGame {
     if(!this.active)return;const e=this.engine,c=this.config,s=this.state;
     this.root.dataset.state=s;this.root.dataset.level=c.id;
     this.$('#escape-title').textContent=c.name;this.$('#escape-tag').textContent=c.tag;
-    for(const b of this.root.querySelectorAll('[data-level]')){b.setAttribute('aria-pressed',String(Number(b.dataset.level)===this.selected));b.dataset.complete=String(this.completed.has(Number(b.dataset.level)));}
+    this.$('#escape-level-select').value=String(this.selected);
+    for(const [i,option] of [...this.$('#escape-level-select').options].entries())option.textContent=`${escapeLevels[i].name} · ${'★'.repeat(escapeLevels[i].difficulty)}${this.completed.has(i)?' ✓':''}`;
+    this.$('#escape-difficulty').textContent=`爬塔－測試中 · 第 ${this.selected+1}/${escapeLevels.length} 關 · ${'★'.repeat(c.difficulty)}`;
     this.$('#escape-card').hidden=['playing','call'].includes(s);this.$('#escape-description').textContent=c.intro;this.$('#escape-description').hidden=['won','lost'].includes(s);
     this.$('#escape-card-title').textContent=s==='paused'?'先停一下，想好再走':s==='won'?'祀裡逃生 · 趕回去了！':s==='lost'?'管理員，被發現了。':'管理員，你人呢？';
-    this.$('#escape-start').textContent=s==='paused'?'繼續回去':['won','lost'].includes(s)?'同關再試一次':'祀不宜遲 · 開始';
+    this.$('#escape-start').textContent=s==='paused'?'繼續回去':['won','lost'].includes(s)?'重來本關':'祀不宜遲 · 開始';
     this.$('#escape-start').disabled=!this.available;this.$('#escape-pause').disabled=s!=='playing';this.$('#escape-next').hidden=s!=='won';
+    this.$('#escape-restart').disabled=!this.available;
     this.$('#escape-result').hidden=!['won','lost'].includes(s);
     if(s==='won'){this.completed.add(this.selected);this.$('#escape-result').textContent=`${e.moves} 次操作 · 剩餘 ${Math.ceil(e.remaining)} 秒${c.stock?` · 放置 ${e.buildCount} 次`:''}\n\n${c.ending}`;}
     if(s==='lost')this.$('#escape-result').textContent=`${e.reason}\n\n沒祀，再來。可以先不操作，看清楚路再開始。`;
     this.$('#escape-hint').textContent=c.hint;
     this.$('#escape-up').hidden=this.$('#escape-down').hidden=!c.rope;
-    for(const id of ['place','reclaim','rise'])this.$(`#escape-${id}`).hidden=c.id!=='build';
+    for(const id of ['place','reclaim','rise','turn'])this.$(`#escape-${id}`).hidden=!c.stock;
     this.$('#escape-carry').hidden=!c.crates.length;this.$('#escape-carry').firstChild.textContent=`搬箱：${e.carry?'開':'關'}`;this.$('#escape-carry').setAttribute('aria-pressed',String(e.carry));
     this.$('#escape-rise').firstChild.textContent=e.buildRise?'階梯':'平橋';
     for(const b of this.root.querySelectorAll('[data-action]'))b.disabled=s!=='playing'||!this.available;
@@ -113,9 +123,11 @@ export class EscapeGame {
     this.stage.update(this.engine,delta);const e=this.engine;
     this.$('#escape-time').textContent=e.moves?`${this.config.caller==='佩利卡'?'送件':'抵達'}倒數 ${Math.ceil(e.remaining)} 秒`:'先看好路，操作後開始計時';
     this.$('#escape-progress').textContent=`位置 ${e.player.x} · 高度 ${e.player.y}`;
-    this.$('#escape-stock').textContent=this.config.stock?`息壤 ${e.inventory} / ${this.config.stock}`:'';
+    this.$('#escape-stock').textContent=this.config.stock?`息壤 ${e.inventory} / ${this.config.stock}${this.config.reclaimLimit!==undefined?` · 可回收 ${e.remainingReclaims} 次`:''}`:this.config.plates?`閘門：${e.gateOpen?'開':'關'}`:'';
     this.$('#escape-corruption-label').hidden=!this.config.rope;this.$('#escape-corruption').value=e.corruption;
     this.root.dataset.jet=e.jetPhase;
+    this.root.dataset.stuck=String(!!e.deadlockHint);
+    if(e.deadlockHint&&this.state==='playing'){this.$('#escape-line').textContent=e.deadlockHint;return;}
     if(this.state==='playing'&&e.clock>=this.messageUntil)this.$('#escape-line').textContent=this.config.rope?(e.jetPhase==='active'?'侵蝕噴流！避開繩索中段。':e.jetPhase==='warning'?'黃光預警：先看好時機。':'噴流停了，趁現在爬！'):this.config.stock?'呱嘎：路沒有，就自己蓋。先看淡綠色預覽格。':'呱嘎：祀不宜遲，但也不能亂推。';
   }
   leave(){this.held=0;this.active=false;this.root.hidden=true;this.$('#escape-call').hidden=true;this.stage.detach();}

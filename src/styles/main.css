@@ -194,3 +194,17 @@ header { top: calc(74px + env(safe-area-inset-top)); } #character-name { font-we
 #game-card { max-height:calc(100dvh - 145px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain; }
 @media(max-height:500px) { .escape-levels { top:calc(61px + env(safe-area-inset-top));max-width:380px; }.escape-levels button { min-height:36px; }.escape-hud { top:calc(106px + env(safe-area-inset-top));right:55%; }.escape-hud small { display:none; }.escape-hud h2 { font-size:17px; }.escape-hud button { padding:5px 8px;min-height:38px; }.escape-meters { top:calc(154px + env(safe-area-inset-top));right:52%;font-size:10px; }#escape-line { top:calc(182px + env(safe-area-inset-top));right:53%;font-size:10px; }.escape-controls { left:auto;right:calc(16px + env(safe-area-inset-right));width:44%;bottom:calc(10px + env(safe-area-inset-bottom)); }#escape-hint { font-size:10px;padding:6px;margin-bottom:5px; }.escape-buttons button { min-height:47px; }.escape-tools button { min-height:43px; }.escape-tools { margin-bottom:4px; }#escape-letter { width:44px;height:58px; }#game-card { max-height:calc(100dvh - 78px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); } }
 .escape-buttons #escape-carry { flex:1.35;white-space:nowrap;padding:8px 6px; }
+
+/* A two-choice index, separate from both games' start screens. */
+#app[data-zone="hub"] header,#app[data-zone="hub"] .panel,#app[data-zone="hub"] #quick-stop,#app[data-zone="hub"] #shoe-status { display:none; }
+#game-hub { position:absolute;inset:0;z-index:4;display:grid;place-items:center;padding:calc(76px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom)); }
+#game-hub > div { width:min(380px,100%);max-height:100%;overflow-y:auto;padding:22px;background:#1d2b27;border:1px solid #b4c99955; }
+#game-hub small { font-size:10px;letter-spacing:.1em;color:#bdcfa7; }#game-hub h2 { font-weight:500;font-size:24px;margin:12px 0 20px; }
+#game-hub button { display:flex;align-items:flex-start;flex-direction:column;width:100%;gap:7px;margin-top:12px;padding:18px;background:#34483b;border-radius:3px;text-align:left; }
+#game-hub strong { font-size:21px;font-weight:500; }#game-hub span { font-size:12px;color:#c6d5b9; }
+#game-audio-status { position:absolute;top:calc(200px + env(safe-area-inset-top));left:16px;right:16px;font-size:11px;text-align:center;color:#d4c98c; }
+.escape-levels { display:flex;align-items:center;font-size:12px;gap:9px; }
+#escape-level-select { flex:1;min-width:0;min-height:42px;padding:8px 10px;font:inherit;font-size:13px;color:#e7eedb;background:#2e4036;border:1px solid #adbc9566;border-radius:3px;pointer-events:auto; }
+.escape-top-actions { display:flex;gap:5px; }.escape-top-actions button { min-height:44px;padding:7px 8px;font-size:12px;white-space:nowrap; }
+#escape-root[data-stuck="true"] #escape-line { color:#ffcfaa;border-left-color:#e6a46b;background:#382b23ee; }
+@media(max-height:500px) { .escape-hud { right:49%; }.escape-hud small { display:block;font-size:9px; }.escape-hud h2 { font-size:15px; }.escape-top-actions button { font-size:10px;padding:5px; }.escape-tools button { padding:6px 4px;font-size:11px; }#escape-level-select { min-height:36px; }#game-hub > div { width:min(480px,100%);padding:12px 18px; }#game-hub h2 { font-size:19px;margin:7px 0; }#game-hub button { padding:12px;margin-top:8px; }#game-hub strong { font-size:18px; }#game-audio-status { top:195px;right:48%; } }
