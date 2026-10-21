@@ -9,7 +9,8 @@ import { raftConfig, riverCenter } from '../config/raftConfig.js';
 // Original low-poly scenery and an approximate ink companion. All resources are
 // owned here; the original GLB, its materials and the shared renderer stay intact.
 export class RaftStage {
-  constructor(scene, camera, models) {
+  constructor(scene, camera, models, config = raftConfig) {
+    this.config = config;
     this.scene = scene;
     this.camera = camera;
     this.models = models;
@@ -78,7 +79,7 @@ export class RaftStage {
       const vertices = [], indices = [];
       for (let i = 0; i <= 100; i++) {
         const s = -25 + i * 3.2, center = riverCenter(s);
-        for (const width of [raftConfig.riverHalfWidth, 35]) vertices.push(center + side * width, .05, -s);
+        for (const width of [this.config.riverHalfWidth, 35]) vertices.push(center + side * width, .05, -s);
         if (i) { const j = i * 2; indices.push(j - 2, j, j - 1, j - 1, j, j + 1); }
       }
       const geometry = this.own(new BufferGeometry());
@@ -118,29 +119,25 @@ export class RaftStage {
       const spoke = this.mesh(box, wood, this.wheel, [0, 0, 0], [.13, 5.5, .13]); spoke.rotation.x = angle;
       const paddle = this.mesh(box, bamboo, this.wheel, [0, Math.cos(angle) * 2.7, Math.sin(angle) * 2.7], [1.4, .28, .6]); paddle.rotation.x = angle;
     }
-    for (const o of raftConfig.obstacles) {
+    for (const o of this.config.obstacles) {
       const x = riverCenter(o.s) + o.offset;
       this.mesh(cylinder, wood, this.root, [x, .6, -o.s], [o.radius * .65, 1.4, o.radius * .65]);
       this.mesh(cylinder, pale, this.root, [x, 1.32, -o.s], [o.radius * .68, .08, o.radius * .68]);
     }
     const stampGeometry = this.own(new TorusGeometry(.55, .12, 6, 16));
-    this.stamps = raftConfig.stamps.map(o => {
+    this.stamps = this.config.stamps.map(o => {
       const mesh = this.mesh(stampGeometry, jade, this.root, [riverCenter(o.s) + o.offset, .95, -o.s]);
       this.mesh(box, pale, mesh, [0, 0, 0], [.3, .3, .15]).rotation.z = Math.PI / 4;
       return mesh;
     });
     // Finish pier and arch remain visibly different from ordinary scenery.
-    const endX = riverCenter(raftConfig.length);
-    this.mesh(box, wood, this.root, [endX, .1, -raftConfig.length - 5], [10, .3, 4]);
-    for (const side of [-1, 1]) this.mesh(cylinder, bamboo, this.root, [endX + side * 5.8, 3, -raftConfig.length], [.16, 6, .16]);
-    this.mesh(box, dark, this.root, [endX, 5.6, -raftConfig.length], [12.4, .5, .9]);
+    const endX = riverCenter(this.config.length);
+    this.mesh(box, wood, this.root, [endX, .1, -this.config.length - 5], [10, .3, 4]);
+    for (const side of [-1, 1]) this.mesh(cylinder, bamboo, this.root, [endX + side * 5.8, 3, -this.config.length], [.16, 6, .16]);
+    this.mesh(box, dark, this.root, [endX, 5.6, -this.config.length], [12.4, .5, .9]);
 
     this.raft = new Group(); this.root.add(this.raft);
-    for (let i = 0; i < 7; i++) {
-      const log = this.mesh(cylinder, bamboo, this.raft, [(i - 3) * .29, .14, 0], [.17, 3.5, .17]); log.rotation.x = Math.PI / 2;
-    }
-    for (const z of [-1.1, 1.1]) this.mesh(box, wood, this.raft, [0, .32, z], [2.2, .09, .12]);
-    this.pole = this.mesh(cylinder, wood, this.raft, [-1.05, 1.1, -.5], [.035, 3.6, .035]); this.pole.rotation.z = -.3;
+    this.buildVehicles({ box, sphere, cylinder, cone, wood, bamboo, dark, pale, jade });
 
     this.pet = new Group(); this.root.add(this.pet);
     this.petBody = new Group(); this.pet.add(this.petBody);
@@ -168,10 +165,18 @@ export class RaftStage {
     this.cameraPosition = new Vector3();
   }
 
+  buildVehicles({ box, cylinder, wood, bamboo }) {
+    for (let i = 0; i < 7; i++) {
+      const log = this.mesh(cylinder, bamboo, this.raft, [(i - 3) * .29, .14, 0], [.17, 3.5, .17]); log.rotation.x = Math.PI / 2;
+    }
+    for (const z of [-1.1, 1.1]) this.mesh(box, wood, this.raft, [0, .32, z], [2.2, .09, .12]);
+    this.pole = this.mesh(cylinder, wood, this.raft, [-1.05, 1.1, -.5], [.035, 3.6, .035]); this.pole.rotation.z = -.3;
+  }
+
   attach() {
     if (this.active) return true;
     const model = this.models.current;
-    if (model?.characterId !== 'si' || !model.idle.supported) return false;
+    if (!this.canAttach(model)) return false;
     this.model = model;
     const { group, idle } = model;
     this.saved = {
@@ -179,14 +184,7 @@ export class RaftStage {
       playing: idle.playing, background: this.scene.scene.background, fog: this.scene.scene.fog,
       near: this.scene.camera.near, far: this.scene.camera.far,
     };
-    idle.stopGesture(); idle.setPlaying(false); idle.update(3, this.scene.camera.position); idle.transition = null;
-    idle.applyBody(null, 0); idle.applyPose(idle.head, 0, 0, 0); idle.setBlink(0);
-    this.bones = idle.transitionBones.map(bone => ({ bone, p: bone.position.clone(), q: bone.quaternion.clone(), s: bone.scale.clone() }));
-    const scale = raftConfig.actorHeight / idle.height;
-    this.raft.add(group);
-    group.scale.setScalar(scale);
-    group.rotation.set(0, Math.PI, 0);
-    group.position.copy(this.saved.position).multiplyScalar(scale).applyQuaternion(group.quaternion).add(new Vector3(0, raftConfig.actorHeight / 2 + .37, 0));
+    this.mountRider(model);
     this.root.visible = this.active = true;
     this.time = 0;
     this.camera.transition = this.camera.story = null; this.camera.stopShoeOrbit(); this.camera.controls.enabled = false;
@@ -194,6 +192,20 @@ export class RaftStage {
     this.scene.scene.background = new Color(0xa9c3af); this.scene.scene.fog = new Fog(0xa9c3af, 28, 105);
     this.firstFrame = true;
     return true;
+  }
+
+  canAttach(model) { return model?.characterId === 'si' && model.idle.supported; }
+
+  mountRider(model) {
+    const { group, idle } = model;
+    idle.stopGesture(); idle.setPlaying(false); idle.update(3, this.scene.camera.position); idle.transition = null;
+    idle.applyBody(null, 0); idle.applyPose(idle.head, 0, 0, 0); idle.setBlink(0);
+    this.bones = idle.transitionBones.map(bone => ({ bone, p: bone.position.clone(), q: bone.quaternion.clone(), s: bone.scale.clone() }));
+    const scale = this.config.actorHeight / idle.height;
+    this.raft.add(group);
+    group.scale.setScalar(scale);
+    group.rotation.set(0, Math.PI, 0);
+    group.position.copy(this.saved.position).multiplyScalar(scale).applyQuaternion(group.quaternion).add(new Vector3(0, this.config.actorHeight / 2 + .37, 0));
   }
 
   update(engine, delta) {
@@ -205,19 +217,7 @@ export class RaftStage {
     this.raft.position.set(engine.x, Math.sin(t * 2.4) * .045, engine.z);
     this.raft.rotation.set(Math.sin(t * 2) * .025, -Math.atan(slope), -engine.velocity * .045 + Math.sin(t * 2.8) * .02);
     this.pole.rotation.x = Math.sin(t * 4) * .14;
-    const idle = this.model.idle;
-    for (const { bone, p, q, s } of this.bones) { bone.position.copy(p); bone.quaternion.copy(q); bone.scale.copy(s); }
-    for (const { name, pose } of idle.body) {
-      const rest = idle.config.restBody[name] || [0, 0, 0];
-      let pitch = 0, roll = 0;
-      if (name === 'spine') { pitch = .1; roll = engine.velocity * .035; }
-      if (name.startsWith('knee')) pitch = .1 + Math.sin(t * 3) * .04;
-      if (name === 'armL') { pitch = -.45; roll = -.25; }
-      if (name === 'armR') { pitch = -.2; roll = .12 + engine.velocity * .05; }
-      idle.applyPose(pose, rest[0] + pitch, rest[1], rest[2] + roll);
-    }
-    idle.applyPose(idle.head, -.04, -.45 + Math.sin(t * .6) * .18, -engine.velocity * .025);
-    idle.setBlink(Math.max(0, 1 - Math.abs((t % 4.6) - .12) / .12));
+    this.updateRider(engine, t);
     this.pet.position.set(p.x, .23 + Math.abs(Math.sin(t * 4)) * .17, p.z);
     // The passenger looks back at the player so its white face remains readable.
     this.pet.rotation.y = Math.atan2(engine.x - p.x, Math.max(.5, p.z - engine.z)) + Math.sin(t * 5) * .12;
@@ -251,6 +251,22 @@ export class RaftStage {
     this.frameCamera(engine, dt);
   }
 
+  updateRider(engine, t) {
+    const idle = this.model.idle;
+    for (const { bone, p, q, s } of this.bones) { bone.position.copy(p); bone.quaternion.copy(q); bone.scale.copy(s); }
+    for (const { name, pose } of idle.body) {
+      const rest = idle.config.restBody[name] || [0, 0, 0];
+      let pitch = 0, roll = 0;
+      if (name === 'spine') { pitch = .1; roll = engine.velocity * .035; }
+      if (name.startsWith('knee')) pitch = .1 + Math.sin(t * 3) * .04;
+      if (name === 'armL') { pitch = -.45; roll = -.25; }
+      if (name === 'armR') { pitch = -.2; roll = .12 + engine.velocity * .05; }
+      idle.applyPose(pose, rest[0] + pitch, rest[1], rest[2] + roll);
+    }
+    idle.applyPose(idle.head, -.04, -.45 + Math.sin(t * .6) * .18, -engine.velocity * .025);
+    idle.setBlink(Math.max(0, 1 - Math.abs((t % 4.6) - .12) / .12));
+  }
+
   frameCamera(engine, delta = 0) {
     if (!this.active) return;
     const camera = this.scene.camera, landscape = camera.aspect > 1.3;
@@ -267,11 +283,15 @@ export class RaftStage {
     this.firstFrame = false;
   }
 
+  restoreRider() {
+    for (const { bone, p, q, s } of this.bones) { bone.position.copy(p); bone.quaternion.copy(q); bone.scale.copy(s); }
+  }
+
   detach() {
     if (!this.active) return;
     const { group, idle } = this.model, saved = this.saved;
     saved.parent.add(group); group.position.copy(saved.position); group.quaternion.copy(saved.rotation); group.scale.copy(saved.scale);
-    for (const { bone, p, q, s } of this.bones) { bone.position.copy(p); bone.quaternion.copy(q); bone.scale.copy(s); }
+    this.restoreRider();
     idle.setPlaying(saved.playing);
     this.scene.scene.background = saved.background; this.scene.scene.fog = saved.fog;
     this.scene.camera.near = saved.near; this.scene.camera.far = saved.far;

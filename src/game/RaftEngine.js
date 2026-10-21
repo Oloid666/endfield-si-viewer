@@ -21,6 +21,8 @@ export class RaftEngine {
     this.ink = new Set();
     this.pet = { x: riverCenter(0), z: this.config.ropeLength, vx: 0, vz: 0 };
     this.event = null;
+    this.heading = this.drift = this.boost = this.charge = this.spins = this.spinCooldown = 0;
+    this.braking = false;
   }
 
   get x() { return riverCenter(this.progress) + this.offset; }
@@ -45,20 +47,37 @@ export class RaftEngine {
     this.elapsed += dt;
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.hit = Math.max(0, this.hit - dt * 2);
-    const targetSpeed = (brake ? c.brakeSpeed : c.speed) * (this.cooldown > .6 ? .58 : 1);
-    this.speed += (targetSpeed - this.speed) * (1 - Math.exp(-dt * 4));
-    this.velocity += (steer * (brake ? 4 : 5.8) - this.velocity) * (1 - Math.exp(-dt * 4.5));
+    const driving = c.driving;
+    this.boost = Math.max(0, this.boost - dt);
+    this.spinCooldown = Math.max(0, this.spinCooldown - dt);
+    if (driving) {
+      if (brake && Math.abs(steer) > .1) this.charge = Math.min(1, this.charge + dt * .8);
+      if (!brake && this.braking) {
+        if (this.charge > .24) { this.boost = driving.boostSeconds; this.event = 'boost'; }
+        this.charge = 0;
+      }
+      this.heading += (steer * driving.turn - this.heading) * (1 - Math.exp(-dt * (brake ? 5 : 3.5)));
+    }
+    this.braking = brake;
+    const targetSpeed = (brake ? c.brakeSpeed : c.speed + (this.boost ? driving?.boostSpeed || 0 : 0)) * (this.cooldown > .6 ? .58 : 1);
+    this.speed += (targetSpeed - this.speed) * (1 - Math.exp(-dt * (driving?.acceleration || 4)));
+    const targetVelocity = driving ? Math.sin(this.heading) * this.speed : steer * (brake ? 4 : 5.8);
+    this.velocity += (targetVelocity - this.velocity) * (1 - Math.exp(-dt * (driving ? brake ? driving.driftGrip : driving.grip : 4.5)));
+    this.drift = driving ? Math.sin(this.heading) * this.speed - this.velocity : 0;
+    if (driving && brake && Math.abs(this.drift) > 2 && !this.spinCooldown) {
+      this.spins++; this.spinCooldown = 4; this.event = 'spin';
+    }
     this.offset += this.velocity * dt;
     if (Math.abs(this.offset) > c.edge) {
       this.offset = clamp(this.offset, -c.edge, c.edge);
       this.velocity *= -.3;
-      this.bump('岸邊');
+      this.bump(driving ? '護欄' : '岸邊');
     }
     this.progress = Math.min(c.length, this.progress + this.speed * dt);
 
     for (const obstacle of c.obstacles) {
       if (Math.abs(this.progress - obstacle.s) < 1.3 && Math.abs(this.offset - obstacle.offset) < obstacle.radius + .7) {
-        this.bump('木樁');
+        this.bump(driving ? '路障' : '木樁');
         // A forgiving bounce: no permanent collision trap in this prototype.
         this.offset = clamp(this.offset + (this.offset >= obstacle.offset ? 1 : -1) * dt * 5, -c.edge, c.edge);
       }
