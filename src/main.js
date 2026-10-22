@@ -285,7 +285,7 @@ try {
     zone=next;if(!['hub','game','climb','escape','raft','ride'].includes(next))lastViewerZone=next;
     document.querySelector('#app').dataset.zone=next;
     document.querySelector('#game-hub').hidden=next!=='hub';
-    history.replaceState(null,'',next==='ride'?`?rider=${ride.character}&ai=${ride.opponentEnabled?1:0}#ride`:`#${next}`);
+    history.replaceState(null,'',next==='ride'?`?rider=${ride.character}&ai=${ride.opponentEnabled?1:0}&course=${ride.courseId}#ride`:`#${next}`);
     for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.setAttribute('aria-pressed',String(button.dataset.zone===next||(['game','climb','escape','raft','ride'].includes(next)&&button.dataset.zone==='hub')));
     document.querySelector('#face-panel').hidden=next==='zhuang';document.querySelector('#action-section').hidden=next==='zhuang';
     camera.controls.enabled=!['hub','game','climb','escape','raft','ride'].includes(next);setPanelExpanded(false);cameraMode=['hub','game','climb','escape','raft','ride'].includes(next)?next:'full';
@@ -319,8 +319,8 @@ try {
   });
   escapeGame=new EscapeGame(document.querySelector('#escape-root'),new EscapeStage(scene,camera,models,escapeLevels[0]),{exit:()=>selectZone('hub')});
   raft=new RaftGame(document.querySelector('#raft-root'),new RaftStage(scene,camera,models),{exit:()=>selectZone('hub')});
-  ride=new RideGame(document.querySelector('#ride-root'),new RideStage(scene,camera,models),{exit:()=>selectZone('hub'),character:key=>{ride.character=key;selectZone('ride');}});
-  for(const button of document.querySelectorAll('#game-hub [data-open]'))button.addEventListener('click',()=>{if(button.dataset.rider)ride.character=button.dataset.rider;selectZone(button.dataset.open);});
+  ride=new RideGame(document.querySelector('#ride-root'),new RideStage(scene,camera,models),{exit:()=>selectZone('hub'),character:key=>{ride.character=key;selectZone('ride');},course:key=>{ride.setCourse(key);selectZone('ride');}});
+  for(const button of document.querySelectorAll('#game-hub [data-open]'))button.addEventListener('click',()=>{if(button.dataset.course)ride.setCourse(button.dataset.course);if(button.dataset.rider)ride.character=button.dataset.rider;selectZone(button.dataset.open);});
   for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.addEventListener('click',()=>selectZone(button.dataset.zone));
   zoneHashListener=()=>{const next=location.hash.slice(1);if(next!==zone&&['si','zhuang','hub','game','climb','escape','raft','ride'].includes(next))selectZone(next);};
   window.addEventListener('hashchange',zoneHashListener);

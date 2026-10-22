@@ -24,8 +24,19 @@ export const encoreScripts = [
 
 export class RaceEncore {
   constructor(random=Math.random){this.random=random;this.recent=[];this.reset();}
-  reset(){this.clock=0;this.next=0;this.active=false;this.current=null;this.gesture=0;this.replies=[];}
-  start(){this.reset();this.active=true;}
+  reset(){this.clock=0;this.next=0;this.active=false;this.current=null;this.gesture=0;this.replies=[];this.winner=null;this.opening=null;this.introEnd=null;}
+  start(engine=null,character='si'){
+    this.reset();this.active=true;
+    if(!engine)return;
+    this.winner=engine.outcome==='late'?null:engine.outcome==='rival'?'si':character;
+    const trial=engine.config.trial;
+    this.opening=trial?(this.winner?trial.endingWin:trial.endingFail):!this.winner?'龍泡泡：領獎處都下班了。莊：那就明天再來。龍泡泡：我申請連休！':this.winner==='si'?(engine.rival.enabled?'祀：獎品跟墨水，我就一起收下了。莊：再一局。龍泡泡：先問過我再說！！小聰明：我申請直接結算。':'祀：墨水拿到了，順便贏一下。小聰明：我的工傷補助呢？'):engine.rival.enabled?'莊：管理員贊助的獎品，我收好了。龍泡泡：維修費也能一起報嗎？祀：椅子也太認真了吧。':'莊：管理員贊助的獎品，我收好了。龍泡泡：維修費也能一起報嗎？';
+  }
+  get focus(){
+    if(!this.winner)return 0;
+    const ease=t=>{const p=Math.max(0,Math.min(1,t));return p*p*(3-2*p);};
+    return this.introEnd!==null&&this.clock>this.introEnd?1-ease((this.clock-this.introEnd)/1.35):ease(this.clock/.8);
+  }
   reply(actor,text){
     if(!this.active||!text)return;
     // Keep the current skit intact. At most two different actors wait to reply.
@@ -36,8 +47,9 @@ export class RaceEncore {
     if(!this.active)return null;
     this.clock+=Math.min(Math.max(delta,0),.12);
     if(this.clock<this.next)return null;
+    if(!this.current&&this.opening){this.current={id:'winner-opening',text:this.opening};this.gesture=1;return this.opening;}
     if(this.current&&this.replies.length){this.current=this.replies.shift();this.gesture=2;return this.current.text;}
-    const pool=encoreScripts.filter(s=>(!s.character||s.character===character)&&(!s.duel||engine.rival.enabled)&&(!s.when||s.when(engine)));
+    const pool=engine.config.trial?engine.config.trial.banter.map((text,i)=>({id:`${engine.config.trial.id}-${i}`,lines:text})):encoreScripts.filter(s=>(!s.character||s.character===character)&&(!s.duel||engine.rival.enabled)&&(!s.when||s.when(engine)));
     // Open with a performance-specific gag. Subsequent skits can use all themes.
     const contextual=pool.filter(s=>s.when);
     const candidates=(this.current?pool:contextual.length?contextual:pool).filter(s=>!this.recent.includes(s.id));
@@ -49,5 +61,5 @@ export class RaceEncore {
     return text;
   }
   // Keep the final reply visible through a short breath, then the next argument.
-  restAfter(duration){this.next=this.clock+duration+.6+this.random()*.4;}
+  restAfter(duration){if(this.introEnd===null)this.introEnd=this.clock+duration;this.next=this.clock+duration+.6+this.random()*.4;}
 }

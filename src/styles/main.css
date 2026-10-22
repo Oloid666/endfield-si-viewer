@@ -324,6 +324,38 @@ header { top: calc(74px + env(safe-area-inset-top)); } #character-name { font-we
 #ride-root #ride-encore-tip { margin:8px 0 0;font-size:10px;line-height:1.5;color:#d1ddb3; }
 #ride-encore-buttons { display:flex;flex-wrap:wrap;gap:6px;margin-top:8px; }
 #ride-encore-buttons button { flex:1;min-width:100px;min-height:44px; }
+#ride-root[data-state="won"] .raft-card { padding:10px 12px; }
+#ride-root[data-state="won"] .raft-card h3 { font-size:18px;margin:0 0 5px; }
+#ride-root[data-state="won"] .raft-card .actions { display:inline-flex;margin-top:6px; }
+#ride-root[data-state="won"] #ride-settings:not([open]) { display:inline-block;vertical-align:top;margin:6px 0 0 8px; }
+#ride-root[data-state="won"] #ride-settings > summary { padding:10px 6px;font-size:10px; }
+#ride-root #ride-result-extra { white-space:pre-line;font-size:11px; }
+.ride-course-label { display:grid;gap:6px;margin:8px 0 12px;font-size:11px; }
+#ride-course { width:100%;min-height:44px;padding:8px;font:inherit;color:#e5eccc;background:#243e37;border:1px solid #bad2ac66;border-radius:3px;pointer-events:auto; }
+#ride-trial-guide { position:absolute;top:calc(104px + env(safe-area-inset-top));left:16px;right:16px;margin:0;padding:6px 8px;color:#e9e8c8;background:#173332bf;border-left:2px solid #b9d9ad;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none; }
+#app[data-zone="ride"]:has(#ride-root[data-trial="true"][data-state="playing"]) .zone-nav { display:none; }
+#ride-root[data-trial="true"][data-state="playing"] .raft-hud { top:calc(14px + env(safe-area-inset-top)); }
+#ride-root[data-trial="true"][data-state="playing"] .raft-hud h2 { display:none; }
+#ride-root[data-trial="true"][data-state="playing"] .raft-hud small { max-width:70%;font-size:12px;letter-spacing:0; }
+#ride-root[data-trial="true"][data-state="playing"] .raft-meters { top:calc(61px + env(safe-area-inset-top));left:16px;right:16px;padding:6px 10px;font-size:12px;background:#172d36b3; }
+#ride-root[data-trial="true"][data-state="playing"] .ride-drift { top:calc(92px + env(safe-area-inset-top));left:16px;right:16px;padding:0;background:transparent; }
+#ride-root[data-trial="true"] .ride-drift label { display:none; }
+#ride-root[data-trial="true"] .ride-drift meter { height:4px; }
+#ride-root[data-trial="true"] .raft-controls { grid-template-columns:1fr 1fr 1fr;gap:10px; }
+#ride-root[data-trial="true"] .raft-controls button { min-height:84px;font-size:30px;background:#183b4280; }
+#ride-root[data-trial="true"] .raft-controls #ride-gas:not(:disabled) { opacity:1;color:#183a3d;background:#e7da9e;border-color:#fff0ae;box-shadow:0 0 18px #e5dc8e77; }
+#ride-root[data-trial="true"] #ride-line { bottom:calc(116px + env(safe-area-inset-bottom));left:16px;right:16px;max-width:500px;text-align:left; }
+#ride-root[data-trial="true"][data-state="won"] #ride-line { bottom:calc(20px + env(safe-area-inset-bottom)); }
+#ride-root[data-course="valley"] #ride-trial-guide { border-color:#f2bd7f;background:#3e3028cf; }
+#ride-root[data-course="dijiang"] #ride-trial-guide { border-color:#8ce4ef;background:#192b49cf; }
+#game-hub [data-course="wuling"] { border-left:3px solid #dfc47d;background:#354d45; }
+#game-hub [data-course="valley"] { border-left:3px solid #e3a66e;background:#4a3d33; }
+#game-hub [data-course="dijiang"] { border-left:3px solid #8ddce6;background:#2a3e52; }
+@media(max-height:500px) {
+  #ride-root[data-trial="true"][data-state="playing"] .raft-meters,#ride-root[data-trial="true"][data-state="playing"] .ride-drift,#ride-trial-guide { right:51%; }
+  #ride-root[data-trial="true"] .raft-controls button { min-height:68px; }
+  #ride-root[data-trial="true"] #ride-line { left:16px;right:50%;bottom:16px; }
+}
 @media(max-height:500px) {
   #ride-root[data-state="won"] .raft-card { top:calc(68px + env(safe-area-inset-top));left:auto;right:16px;width:43%;max-height:calc(100dvh - 90px);padding:12px; }
   #ride-root[data-state="won"] .raft-card h3 { font-size:16px; }
