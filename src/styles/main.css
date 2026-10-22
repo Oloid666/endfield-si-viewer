@@ -224,6 +224,11 @@ header { top: calc(74px + env(safe-area-inset-top)); } #character-name { font-we
 #ride-comic { position:absolute;top:calc(224px + env(safe-area-inset-top));left:18px;transform:rotate(-3deg);width:max-content;max-width:min(260px,calc(100% - 36px));padding:8px 12px;color:#292e25;background:#ece5c5;border:3px solid #253a31;box-shadow:5px 5px 0 #253a31;pointer-events:none;text-align:center; }
 #ride-comic small { display:block;font-size:9px;margin-bottom:4px; }#ride-comic strong { display:block;font-size:20px;font-weight:800; }
 #ride-root[data-boost="true"] .raft-meters { border-left-color:#ffd578;color:#ffdf9c; }
+#ride-story { position:absolute;left:16px;right:16px;top:calc(222px + env(safe-area-inset-top));padding:10px 13px;background:#19382ff2;border:1px solid #d8ca86;border-left:4px solid #e2d28e;box-shadow:0 6px 22px #182e2740;pointer-events:none; }
+#ride-story strong { display:block;color:#f0dfa5;font-size:13px; }#ride-story p { margin:6px 0 0;font-size:12px;line-height:1.7;white-space:pre-line; }
+#ride-root[data-state="paused"] #ride-story,#ride-root[data-state="won"] #ride-story { display:none; }
+#ride-root[data-story="bridge"] .ride-vfx { opacity:.45;background:linear-gradient(90deg,#d6d58d55,transparent 20%,transparent 80%,#d6d58d55); }
+@media(max-height:500px) { #ride-story { top:calc(207px + env(safe-area-inset-top));right:53%;padding:7px 10px; }#ride-story strong { font-size:11px; }#ride-story p { font-size:10px;line-height:1.5;margin-top:4px; } }
 #ride-root .raft-card { max-height:calc(100dvh - 235px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 @media(max-height:500px) { .ride-drift { top:calc(163px + env(safe-area-inset-top));right:53%; }#ride-comic { top:calc(211px + env(safe-area-inset-top));left:18px;max-width:43%;padding:7px 10px; }#ride-comic strong { font-size:15px; }#ride-root .raft-card { max-height:calc(100dvh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }.ride-picker { margin-bottom:8px; }.ride-picker button { min-height:42px;font-size:10px;padding:5px; } }
 #app:is([data-zone="raft"],[data-zone="ride"]) header,#app:is([data-zone="raft"],[data-zone="ride"]) .panel,#app:is([data-zone="raft"],[data-zone="ride"]) #quick-stop,#app:is([data-zone="raft"],[data-zone="ride"]) #shoe-status { display:none; }
