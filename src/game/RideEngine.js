@@ -7,7 +7,7 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 // Driving has its own rules; the original raft keeps its previous handling.
 // Reuses the fixed-step clock and bounded follower spring from RaftEngine.
 export class RideEngine extends RaftEngine {
-  constructor(config = rideConfig) { super(config); this.baseConfig = config; }
+  constructor(config = rideConfig, random = Math.random) { super(config); this.baseConfig = config; this.random=random; }
 
   setCharacter(character) { this.character = character === 'zhuang' ? 'zhuang' : 'si'; this.config = this.isZhuang ? zhuangRideConfig : this.baseConfig; this.reset(); }
   get isZhuang() { return this.character === 'zhuang'; }
@@ -16,7 +16,8 @@ export class RideEngine extends RaftEngine {
   get prizeRemaining() { return this.prizeDeadline === null ? null : Math.max(0, this.prizeDeadline - this.prizeClock); }
   setOpponent(enabled) {
     this.rivalEnabled = !!enabled;
-    this.rival = { enabled: this.isZhuang && !!enabled, progress: 0, speed: rivalRideConfig.introSpeed, offset: -rivalRideConfig.lane, clock: 0,
+    const style=(this.random?.()??Math.random())<.5?'early':'late';
+    this.rival = { enabled: this.isZhuang && !!enabled, style, progress: 0, speed: rivalRideConfig.introSpeed, offset: -rivalRideConfig.lane, clock: 0,
       finished: false, finishTime: null, burst: 0, windup:0, queued:false, nextBurst: zhuangRace.raceAt + 1, bursts: 0, cornering: false,
       lead: 0, nextQuip: zhuangRace.raceAt + 5, reactionUntil: 0, reaction: null, near: false };
   }
@@ -50,6 +51,7 @@ export class RideEngine extends RaftEngine {
     this.jump=null;this.jumpTried=new Set();this.jumpResolved=new Set();this.jumpWins=this.jumpFails=0;this.jumpWarned=new Set();
     this.rescueStarted=null;
     this.petGrudge=0;this.grudgeDecayAt=0;this.lastGapBand=null;this.nextGapLineAt=0;
+    this.flair=0;this.flairUntil=0;this.nextFlairAt=5+(this.random?.()??Math.random())*4;
     if (this.isZhuang) { this.speed = this.topSpeed = zhuangRace.introSpeed; this.gasLeft = 2; this.pet.z = -this.config.ropeLength; }
   }
 
@@ -90,10 +92,14 @@ export class RideEngine extends RaftEngine {
     r.cornering = bend > c.straightCurvature;
     const racing = r.clock >= zhuangRace.raceAt;
     if (racing && !r.cornering && r.clock >= r.nextBurst && !r.burst && !r.queued) {
-      r.windup=c.windupSeconds;r.queued=true;r.nextBurst=r.clock+c.burstCooldown;
+      const frontHalf=r.progress<this.config.length*.5;
+      const aggressive=(r.style==='early')===frontHalf;
+      r.windup=c.windupSeconds;r.queued=true;r.nextBurst=r.clock+c.burstCooldown+(aggressive?-c.burstCooldownSwing:c.burstCooldownSwing);
       if (Math.abs(r.progress - this.progress) < 80) this.emit('rival', { action: 'windup' });
     }
-    const target = racing ? Math.min(c.maxSpeed, c.cruiseSpeed * (1 - Math.min(c.cornerLoss, bend * 12)) + (r.burst ? c.burstSpeed : 0)) : c.introSpeed;
+    const frontHalf=r.progress<this.config.length*.5;
+    const pace=1+(((r.style==='early')===frontHalf)?c.paceSwing:-c.paceSwing);
+    const target = racing ? Math.min(c.maxSpeed, c.cruiseSpeed * pace * (1 - Math.min(c.cornerLoss, bend * 12)) + (r.burst ? c.burstSpeed : 0)) : c.introSpeed;
     r.speed += (target - r.speed) * (1 - Math.exp(-dt * c.acceleration));
     // Choose a passing lane, then ease across it. Neither racer can block the other.
     const lane = Math.abs(r.progress - this.progress) < 22 ? (this.offset < 0 ? c.lane : -c.lane) : -Math.sign(this.curvature(r.progress + 15) || 1) * c.lane;
@@ -143,6 +149,7 @@ export class RideEngine extends RaftEngine {
     }
     dt *= this.timeScale;
     this.prizeClock += dt;
+    if(this.prizeClock>=this.nextFlairAt){this.flair=Math.floor((this.random?.()??Math.random())*3);this.flairUntil=this.prizeClock+1.6;this.nextFlairAt=this.prizeClock+8+(this.random?.()??Math.random())*5;}
     if(this.petGrudge&&this.prizeClock>=this.grudgeDecayAt){this.petGrudge--;this.grudgeDecayAt=this.prizeClock+5;if(this.petGrudge===2)this.emit('grudge-calm');}
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.hit = Math.max(0, this.hit - dt * 2.2);

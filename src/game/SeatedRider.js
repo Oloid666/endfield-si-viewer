@@ -66,6 +66,11 @@ export class SeatedRider {
     if (pose?.determined) this.rotate('spine', [1, 0, 0], -.18 * pose.determined);
     this.rotate('head', [0, 1, 0], (this.sideSaddle ? -.35 + this.lookBack * .65 : -.3) + Math.sin(time * .8) * .12);
     this.rotate('head', [0, 0, 1], lean * .12 + hit * .18);
+    if(pose?.encore){
+      this.rotate('spine',[1,0,0],Math.sin(time*1.7)*.035);
+      this.rotate('head',[0,1,0],pose.gesture===2?Math.sin(time*.9)*.3:.12);
+      this.rotate('head',[1,0,0],pose.talking?Math.sin(time*5)*.09:Math.sin(time*1.1)*.025);
+    }
     if(!this.sideSaddle&&pose){
       const alert=pose.story==='sponsor'||pose.story==='takeover';
       this.rotate('head',[1,0,0],alert?-.14:pose.story==='takeoff'?-.22:0);
@@ -80,6 +85,8 @@ export class SeatedRider {
       else {
         const folded=pose?.story==='drag',magic=pose?.magic&&side==='R';
         this.target.set(folded?-sign*.19:sign*.35,magic ? .95 : folded ? .6 : .3,magic?-.85:folded?-.3:-.57);
+        if(pose?.encore&&pose.gesture===1)this.target.set(side==='R'?.28:.18,side==='R'?.52:.6,-.3); // straighten a sleeve
+        if(pose?.encore&&pose.gesture===2&&pose.talking&&side==='R')this.target.set(-.8,.65,-.15); // point at the other racer
       }
       this.mount.localToWorld(this.target);
       this.pole.set(sign * 1.1, .1, -.1); this.mount.localToWorld(this.pole);

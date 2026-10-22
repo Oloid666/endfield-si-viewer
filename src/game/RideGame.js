@@ -3,6 +3,7 @@ import { RideEngine } from './RideEngine.js';
 import { rideConfig, rideProfiles } from '../config/rideConfig.js';
 import { zhuangBeats, zhuangRace, openingDialogue, siOpeningDialogue, impactLines, rivalLines, gapLines } from './ZhuangRaceStory.js';
 import { RaceDialogue } from '../ui/RaceDialogue.js';
+import { RaceEncore } from './RaceEncore.js';
 
 // Reuse held-touch controls and pause lifecycle; keep a distinct DOM / menu entry.
 export class RideGame extends RaftGame {
@@ -45,16 +46,22 @@ export class RideGame extends RaftGame {
     this.onGasKey = event => { if (this.active && event.code === 'KeyE' && !event.repeat && !/INPUT|SELECT|TEXTAREA/.test(event.target.tagName)) { event.preventDefault(); this.activatePower(); } };
     document.addEventListener('keydown', this.onGasKey);
     this.raceDialogue=new RaceDialogue(this.$('#ride-line'));
+    this.encore=new RaceEncore();
+    const settings=document.createElement('details');settings.id='ride-settings';settings.open=true;
+    const summary=document.createElement('summary');summary.textContent='賽事設定與操作';settings.append(summary);
+    for(const node of [this.$('.ride-picker'),this.$('#ride-rival-option'),this.$('#ride-rival-status'),this.$('#ride-card .hint'),this.$('#ride-card > details')])settings.append(node);
+    this.$('#ride-card').append(settings);
   }
 
   get profile() { return rideProfiles[this.character]; }
-  enter() { this.siOpeningIndex=-1;this.engine.setCharacter(this.character); this.stage.setCharacter(this.character); super.enter(); this.comicUntil = this.nextQuipAt = 0; this.openingIndex = -1; this.pickupFlashUntil = 0; this.rivalTaunt = false; this.$('#ride-comic').hidden = true; this.message(this.profile.start); this.prepareOpponent(); }
+  enter() { this.encore.reset();this.endingStarted=false;this.siOpeningIndex=-1;this.engine.setCharacter(this.character); this.stage.setCharacter(this.character); super.enter(); this.comicUntil = this.nextQuipAt = 0; this.openingIndex = -1; this.pickupFlashUntil = 0; this.rivalTaunt = false; this.$('#ride-comic').hidden = true; this.message(this.profile.start); this.prepareOpponent(); }
   start(restart = false) {
     if (this.rivalLoading) return;
     const resume = this.engine.state === 'paused' && !restart;
     super.start(restart);
     if (!this.ready) return;
     if (!resume) {
+      this.encore.reset();this.$('#ride-settings').open=true;this.stage.encoreReady=false;
       this.stage.lastTime = this.stage.lastSpins = this.stage.lastBumps = this.stage.seatSpin = 0;
       this.stage.shotUntil = 0;
       this.stage.resetEffects();
@@ -63,7 +70,7 @@ export class RideGame extends RaftGame {
       this.nextQuipAt = 0; this.openingIndex = -1; this.pickupFlashUntil = 0; this.rivalTaunt = false;
       this.rivalQuipIndex = 0;
       this.siOpeningIndex=-1;
-      this.endingStarted=false;this.endingClock=0;
+      this.endingStarted=false;
       this.message(this.profile.start);
     }
   }
@@ -71,7 +78,9 @@ export class RideGame extends RaftGame {
   message(text,mood=null){
     if(!this.raceDialogue){super.message(text);return;}
     const e=this.engine;
-    this.messageUntil=e.elapsed+this.raceDialogue.set(text,e.elapsed,this.character,mood,e.petGrudge);
+    const clock=e.elapsed+(e.state==='won'?this.encore.clock:0);
+    const duration=this.raceDialogue.set(text,clock,this.character,mood,e.state==='won'?0:e.petGrudge);
+    this.messageUntil=clock+duration;return duration;
   }
 
   gameplayLine(events){
@@ -109,7 +118,9 @@ export class RideGame extends RaftGame {
       this.$('#ride-result').textContent = `${e.elapsed.toFixed(1)} 秒 · 最高 ${(e.topSpeed * 3.6).toFixed(0)} km/h\n龍泡泡：地上撞 ${e.petGroundBumps} 次／天上撞 ${e.petAirBumps} 次\n${ending}\n${e.rival.enabled ? '祀 AI 對戰' : '單人故事模式'}`;
     }
     if (this.rivalLoading) { this.$('#ride-start').disabled = true; if (this.ready) this.$('#ride-start').textContent = '祀正在上車…'; }
-    if(e.state==='won'&&!this.endingStarted){this.endingStarted=true;this.endingClock=0;this.message('小聰明：妳也是來休息的？龍泡泡：她是。我不是。');}
+    if(e.state==='won'&&!this.endingStarted){this.endingStarted=true;this.encore.start();this.stage.encoreReady=false;this.$('#ride-settings').open=false;this.$('#ride-comic').hidden=true;this.$('#ride-prize').hidden=true;}
+    if(e.state==='won'){for(const key of ['boost','gas','impact','slow','refill'])this.root.dataset[key]='false';this.root.dataset.pace='calm';}
+    if(e.state!=='won')this.$('#ride-settings').open=true;
     for (const button of this.root.querySelectorAll('[data-rider]')) button.setAttribute('aria-pressed', String(button.dataset.rider === this.character));
   }
 
@@ -137,12 +148,21 @@ export class RideGame extends RaftGame {
   update(delta) {
     if (!this.active) return;
     const e = this.engine, before = e.state, p = this.profile;
+    if(e.state==='won'){
+      // Results and race clocks remain frozen; only this visual/skit clock runs.
+      const line=this.encore.update(delta,e,this.character);
+      if(line)this.encore.restAfter(this.message(line));
+      const clock=e.elapsed+this.encore.clock;this.raceDialogue.update(clock);
+      this.$('#ride-line').hidden=clock>=this.messageUntil;
+      const part=this.raceDialogue.parts?.[this.raceDialogue.index];
+      this.stage.updateEncore(e,delta,{...part,gesture:this.encore.gesture,talking:clock<this.messageUntil});
+      return;
+    }
     e.update(delta, this.input); this.stage.update(e, delta * e.timeScale);
     this.raceDialogue.update(e.elapsed);
     const events = e.takeEvents();
     if (e.isZhuang) {
       this.updateZhuang(events);
-      if(e.state==='won'){this.endingClock+=delta;this.raceDialogue.update(e.elapsed+this.endingClock);this.$('#ride-line').hidden=false;}
       if (before !== e.state) { this.clearInput(); this.render(); }
       return;
     }
@@ -163,7 +183,6 @@ export class RideGame extends RaftGame {
     if (e.elapsed >= (this.comicUntil || 0)) this.$('#ride-comic').hidden = true;
     this.updateMeters();
     this.root.dataset.boost = String(e.boost > 0 || e.gasTime > 0);
-    if(e.state==='won'){this.endingClock+=delta;this.raceDialogue.update(e.elapsed+this.endingClock);this.$('#ride-line').hidden=false;}
     if (before !== e.state) { this.clearInput(); this.render(); }
   }
   updateZhuangMeters() {
@@ -201,7 +220,7 @@ export class RideGame extends RaftGame {
       const index = openingDialogue.findLastIndex(line => e.elapsed >= line.at);
       if (index !== this.openingIndex) { this.openingIndex = index; this.message(openingDialogue[index].line); this.messageUntil = e.elapsed + 2.8; }
     } else if (!story && e.rival.enabled && !this.rivalTaunt && e.elapsed >= 15 && e.elapsed < 22) {
-      this.message('祀：本來只領墨水，獎品我也要。'); this.rivalTaunt = true; this.nextQuipAt = e.elapsed + 4;
+      this.message(this.engine.rival.style==='early'?'祀：獎品只有一份，我先收筆！':'祀：先讓妳跑一段，我留著墨呢。'); this.rivalTaunt = true; this.nextQuipAt = e.elapsed + 4;
     } else if (!story && e.takeoffPending && e.elapsed >= this.messageUntil) {
       this.message('點右下 ⇧ 起飛，龍泡泡不負責降落！');
     } else if (!story && e.elapsed >= this.nextQuipAt && e.state === 'playing') {
