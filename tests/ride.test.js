@@ -12,10 +12,53 @@ import { ZhuangIdleController } from '../src/viewer/ZhuangIdleController.js';
 import { dialogueParts } from '../src/ui/RaceDialogue.js';
 import { RaceEncore } from '../src/game/RaceEncore.js';
 import { buildCompanion, animateCompanion } from '../src/game/RideProps.js';
+import { EncorePlay, encoreCast } from '../src/game/EncorePlay.js';
 
 const advance = (e, seconds, input = {}, fps = 60) => {
   for (let i = 0; i < seconds * fps; i++) e.update(1 / fps, input);
 };
+
+test('ending taps react immediately, preserve the current skit and keep the reply queue bounded',()=>{
+  const e=new RideEngine();e.setCharacter('zhuang');e.setOpponent(true);e.state='won';
+  const encore=new RaceEncore(()=>.3),play=new EncorePlay(()=>.3),cast=encoreCast('zhuang',true);
+  encore.start();const first=encore.update(0,e,'zhuang');encore.restAfter(7);const deadline=encore.next;
+  const reply=play.tap('dragon',cast);assert(reply);assert.equal(play.sample('dragon').kind,'roll');
+  encore.reply('dragon',reply);assert.equal(encore.current.text,first);assert.equal(encore.next,deadline);
+  assert.equal(play.tap('ink',cast),null,'rapid taps cannot flood replies');
+  for(let n=0;n<100;n++)encore.reply(cast[n%4],`回嘴${n}`);
+  assert.equal(encore.replies.length,2);assert.equal(encore.current.text,first);
+  while(encore.clock<deadline-.12)assert.equal(encore.update(.12,e,'zhuang'),null);
+  const next=encore.update(.12,e,'zhuang');assert.match(next,/回嘴/);encore.restAfter(5);
+  encore.reset();play.reset();assert.equal(encore.replies.length,0);assert.equal(play.actions.size,0);
+});
+
+test('idle ending actions include every present actor, repeat rolls and stay bounded for three minutes',()=>{
+  for(const [character,duel] of [['zhuang',true],['zhuang',false],['si',false]]){
+    const e=new RideEngine();e.setCharacter(character);e.state='won';const frozen=JSON.stringify(e);
+    const play=new EncorePlay(()=>.4),cast=encoreCast(character,duel),seen=new Set(),kinds=new Set(),directions=new Set();
+    assert.equal(play.tap('absent',cast),null);
+    for(let frame=0;frame<180*60;frame++){
+      play.update(1/60,cast);
+      for(const actor of cast){const action=play.sample(actor);if(!action)continue;seen.add(actor);kinds.add(action.kind);if(Math.abs(action.roll)>1)directions.add(Math.sign(action.roll));
+        for(const value of Object.values(action))if(typeof value==='number')assert(Number.isFinite(value));
+        assert(action.hop<=.75&&Math.abs(action.travel)<=.55&&Math.abs(action.rock)<=.2);
+        const body=new Group();body.scale.setScalar(.85);
+        RideStage.prototype.animateEncorePet.call({},body,action);
+        assert(Math.abs(body.position.x)<1.3&&body.position.y>=0&&body.position.y<2.2);
+      }
+    }
+    assert.deepEqual([...seen].sort(),[...cast].sort());assert(kinds.has('roll')&&kinds.has('hop')&&kinds.has('twirl')&&kinds.has('rock'));
+    assert.deepEqual([...directions].sort(),[-1,1]);
+    assert.equal(JSON.stringify(e),frozen);
+  }
+});
+
+test('ending taps cannot target absent cast and time spikes do not skip a whole action',()=>{
+  const play=new EncorePlay(()=>.5),cast=encoreCast('si',false);
+  assert.equal(play.tap('dragon',cast),null);assert.equal(play.tap('zhuang',cast),null);
+  assert(play.tap('ink',cast));play.update(60,cast);assert.equal(play.clock,.12);assert(play.sample('ink'));
+  const start=play.actions.get('ink').start;play.nextTap=0;assert(play.tap('ink',cast));assert.equal(play.actions.get('ink').start,start);
+});
 
 test('ink face belongs to the round lit head, stress moves the spirit together and resources are released',()=>{
   const previous=globalThis.document;

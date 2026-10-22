@@ -5,6 +5,7 @@ import { RideOpponent } from './RideOpponent.js';
 import { rideConfig, rideProfiles, zhuangRideConfig } from '../config/rideConfig.js';
 import { buildCompanion, buildFlyingBrush, animateCompanion } from './RideProps.js';
 import { takeoverBlend, zhuangRace } from './ZhuangRaceStory.js';
+import { encoreCast } from './EncorePlay.js';
 
 // A fan-made flying brush and a runaway office chair, not official assets.
 export class RideStage extends RaftStage {
@@ -261,6 +262,7 @@ export class RideStage extends RaftStage {
 
   resetEffects() {
     this.encoreReady=false;
+    if(this.petBody){this.petBody.position.set(0,0,0);this.petBody.rotation.set(0,0,0);this.petBody.scale.setScalar(.85);}
     if(this.rope)this.rope.visible=true;
     if(this.opponent?.rope)this.opponent.rope.visible=true;
     if(this.opponent?.badge)this.opponent.badge.visible=true;
@@ -421,7 +423,7 @@ export class RideStage extends RaftStage {
     this.opponent?.update(engine);
   }
 
-  updateEncore(engine,delta,{speaker,mood='calm',gesture=0,talking=false}={}){
+  updateEncore(engine,delta,{speaker,mood='calm',gesture=0,talking=false,play=null}={}){
     if(!this.active)return;
     this.time+=Math.max(0,Math.min(delta,.12));
     const t=this.time,duel=engine.rival.enabled&&this.opponent?.ready;
@@ -435,21 +437,65 @@ export class RideStage extends RaftStage {
     this.raft.position.set(x-(duel?1.7:0),this.profile.hover+Math.sin(t*1.7)*.025,z);
     this.raft.rotation.set(0,Math.PI,Math.sin(t*1.3)*.012);
     const seat=this.character==='si'?this.brushSeat:this.chairSeat;seat.rotation.y=0;
+    const ownAction=play?.sample(this.character);
+    this.animateEncoreRider(this.raft,seat,ownAction);
     const ownTalking=talking&&speaker===this.character;
-    this.rider.update(t,0,0,{encore:true,talking:ownTalking,gesture,story:'drag',wave:ownTalking&&gesture===1});
+    this.rider.update(t,0,0,{encore:true,talking:ownTalking,gesture:ownAction?2:gesture,story:'drag',wave:!!ownAction||ownTalking&&gesture===1});
     const hiding=gesture===1&&!talking,exhausted=gesture===0&&engine.petBumps>=4;
     this.pet.position.set(x+(hiding?-(duel?1.7:0)+.75:duel?-.45:1.6),.15+Math.abs(Math.sin(t*2))*.08,z+(hiding?-.4:1.2));
-    this.pet.rotation.set(0,0,0);this.petBody.rotation.set(exhausted?-.25:0,0,exhausted?-.65:Math.sin(t*1.9)*.035);this.petBody.scale.setScalar(.85);
+    this.pet.rotation.set(0,0,0);this.petBody.position.set(0,0,0);this.petBody.rotation.set(exhausted?-.25:0,0,exhausted?-.65:Math.sin(t*1.9)*.035);this.petBody.scale.setScalar(.85);
     const petId=this.character==='si'?'ink':'dragon',petTalking=talking&&speaker===petId;
     animateCompanion(this.character==='si'?this.inkProp:this.dragonProp,t,{mood:petTalking?mood:exhausted?'dead':'calm',wave:petTalking?1:0,stress:petTalking&&mood==='panic'?.5:0,blink:Math.max(0,1-Math.abs(t%4.7-.12)/.1),lookUp:.25});
+    this.animateEncorePet(this.petBody,play?.sample(petId));
     if(duel){
       const o=this.opponent;o.root.visible=true;o.root.position.set(x+1.25,.95+Math.sin(t*1.7+2)*.04,z-.7);o.root.rotation.set(0,0,0);
       o.badge.visible=false;this.brushSeat.rotation.y=0;
-      o.rig.update(t,0,0,{encore:true,talking:talking&&speaker==='si',gesture,wave:talking&&speaker==='si'&&gesture===1,lookBack:.4});
+      const siAction=play?.sample('si');this.animateEncoreRider(o.root,this.brushSeat,siAction);
+      o.rig.update(t,0,0,{encore:true,talking:talking&&speaker==='si',gesture:siAction?1:gesture,wave:!!siAction||talking&&speaker==='si'&&gesture===1,lookBack:.4});
       this.inkBody.position.set(-.15,-.75,2.5);this.inkBody.rotation.set(0,0,Math.sin(t*2)*.06);this.inkBody.scale.setScalar(.75);
       animateCompanion(this.inkProp,t,{mood:talking&&speaker==='ink'?mood:'calm',wave:talking&&speaker==='ink'?1:0,blink:Math.max(0,1-Math.abs(t%4.3-.1)/.1),lookUp:.25});
+      this.animateEncorePet(this.inkBody,play?.sample('ink'));
     }
     this.frameEncoreCamera(engine);
+  }
+
+  animateEncoreRider(root,seat,action){
+    if(!action)return;
+    root.position.y+=action.hop;root.rotation.z+=action.rock;
+    seat.rotation.y+=action.turn;
+  }
+
+  animateEncorePet(body,action){
+    if(!action)return;
+    // Roll around the belly rather than the foot origin, so the body stays on
+    // the stage instead of disappearing below the road halfway through a turn.
+    const height=.85*body.scale.y;
+    body.rotation.z=action.roll+action.rock;
+    body.position.x+=action.travel+Math.sin(action.roll)*height;
+    body.position.y+=action.hop+(1-Math.cos(action.roll))*height;
+    body.scale.y*=1-action.envelope*.12;
+    body.scale.x*=1+action.envelope*.08;
+  }
+
+  getEncoreCast(engine){return encoreCast(this.character,engine.rival.enabled&&this.opponent?.ready);}
+
+  encoreTargets(engine){
+    if(!this.active||engine.state!=='won')return [];
+    const camera=this.scene.camera,rect=this.scene.renderer.domElement.getBoundingClientRect();
+    const cast=this.getEncoreCast(engine);
+    camera.updateWorldMatrix(true,false);
+    return cast.map(id=>{
+      const human=id==='si'||id==='zhuang';
+      const object=human?(id===this.character?this.rider.nodes.head:this.opponent.rig.nodes.head):(id==='ink'?this.inkBody:this.dragon);
+      const point=human?object.getWorldPosition(new Vector3()):object.localToWorld(new Vector3(0,.95,0));
+      if(human)point.y-=.25;
+      point.project(camera);
+      return {id,x:rect.left+(point.x+1)*rect.width/2,y:rect.top+(1-point.y)*rect.height/2,rx:human?32:42,ry:human?48:42,visible:point.z>-1&&point.z<1&&Math.abs(point.x)<1&&Math.abs(point.y)<1};
+    });
+  }
+
+  pickEncoreActor(engine,x,y){
+    return this.encoreTargets(engine).filter(target=>target.visible).map(target=>({...target,distance:((x-target.x)/target.rx)**2+((y-target.y)/target.ry)**2})).filter(target=>target.distance<=1).sort((a,b)=>a.distance-b.distance)[0]?.id||null;
   }
 
   frameEncoreCamera(engine){
