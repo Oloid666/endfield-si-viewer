@@ -36,6 +36,7 @@ export const rideConfig = {
     { s: 470, offset: -3 }, { s: 610, offset: 4 }, { s: 760, offset: 0 },
   ],
   sectors: [{ s: 0, name: '清波寨快速路', caption: '工作地點：持續移動中' }, { s: 300, name: '連彎工業區', caption: '氣態息壤，固態嘴硬' }, { s: 650, name: '禁止正常上班', caption: '前方簽到，禁止超速辦公' }],
+  jumps: [{ s:600, gapStart:615, gapEnd:630, width:7, landingWidth:7, minSpeed:16, seconds:1.85, height:3 }],
 };
 
 // Gentle first turns, a straight sponsor zone, then alternating larger bends.
@@ -62,13 +63,14 @@ export const zhuangRideConfig = {
   sectors: [{ s: 0, name: '龍泡泡帶薪兜風', caption: '' }, { s: 420, name: '莊芳宜搶獎品', caption: '' }, { s: 1900, name: '禁止飛行辦公', caption: '' }],
   petHazards: [580, 820, 1050, 1280, 1500, 1720].map((s, i) => ({ s, offset: i % 2 ? 4.2 : -4.2, radius: .8, name: ['加班打卡機', '待辦事項', '會議邀請', '休假申請', '績效考核', '禁止內卷'][i] })),
   airHazards: [1985, 2080, 2175, 2270, 2365, 2460, 2545].flatMap(s => [-1, 1].map(side => ({ s, offset: side * 5.5, height: 6.8, width: 8, tall: 3, name: side < 0 ? '反內卷結界' : '空中考勤' }))),
+  jumps: [{ s:1775, gapStart:1800, gapEnd:1825, width:7, landingWidth:4.5, minSpeed:30, seconds:1.7, height:3.4 }],
 };
 
 // A repeatable opponent pace: no rubber-banding or position-based speed bonus.
 export const rivalRideConfig = {
   introSpeed: 15, cruiseSpeed: 48, maxSpeed: 58, acceleration: 2.2,
   cornerLoss: .2, burstSpeed: 10, burstSeconds: 2, burstCooldown: 6,
-  straightCurvature: .0025, lane: 2.5, passMargin: 5, quipCooldown: 8,
+  straightCurvature: .0025, lane: 2.5, passMargin: 5, quipCooldown: 8, windupSeconds:.75,
 };
 
 export const rideProfiles = {
@@ -76,12 +78,12 @@ export const rideProfiles = {
     name: '祀', vehicle: '側坐水墨毛筆', companion: '小聰明', hover: .95,
     source: 'https://sketchfab.com/3d-models/si-arknights-endfield-304e5f23db204cbd834b44138ca570d7',
     title: '筆祀誰開得快？',
-    intro: '祀側坐水墨毛筆，小聰明被迫當風箏。方向＋煞車蓄甩尾，放開噴射；氣態息壤可再加速。',
-    start: '祀：御筆飛行，也算寫作業吧。',
+    intro: '本來參賽只為領免費墨水，聽到管理員親自頒獎就認真了。祀側坐毛筆，小聰明被迫當風箏。',
+    start: '祀：繞一圈，領墨水，回家。',
     boost: '祀：收筆！　小聰明：我還沒收啊！！',
     bump: '小聰明：你這不是寫意，是寫遺書！！',
     spin: '祀：船頭在哪？　小聰明：先問我在哪！！',
-    finish: '小聰明：下次你掛在後面。',
+    finish: '祀：我只是順便贏一下，墨水也別忘了。小聰明：下次你掛後面。',
     idle: ['祀：這叫筆走龍蛇。　小聰明：龍蛇在哪？我嗎？！', '系統：請勿將文具作為個人代步工具。', '祀：不用怕，我畫過駕照。　小聰明：你畫的？！'],
   },
   zhuang: {

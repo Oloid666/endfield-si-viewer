@@ -1,7 +1,8 @@
 import { RaftGame } from './RaftGame.js';
 import { RideEngine } from './RideEngine.js';
 import { rideConfig, rideProfiles } from '../config/rideConfig.js';
-import { zhuangBeats, zhuangRace, openingDialogue, impactLines, rivalLines } from './ZhuangRaceStory.js';
+import { zhuangBeats, zhuangRace, openingDialogue, siOpeningDialogue, impactLines, rivalLines, gapLines } from './ZhuangRaceStory.js';
+import { RaceDialogue } from '../ui/RaceDialogue.js';
 
 // Reuse held-touch controls and pause lifecycle; keep a distinct DOM / menu entry.
 export class RideGame extends RaftGame {
@@ -43,10 +44,11 @@ export class RideGame extends RaftGame {
     root.addEventListener('click', this.onClick);
     this.onGasKey = event => { if (this.active && event.code === 'KeyE' && !event.repeat && !/INPUT|SELECT|TEXTAREA/.test(event.target.tagName)) { event.preventDefault(); this.activatePower(); } };
     document.addEventListener('keydown', this.onGasKey);
+    this.raceDialogue=new RaceDialogue(this.$('#ride-line'));
   }
 
   get profile() { return rideProfiles[this.character]; }
-  enter() { this.engine.setCharacter(this.character); this.stage.setCharacter(this.character); super.enter(); this.comicUntil = this.nextQuipAt = 0; this.openingIndex = -1; this.pickupFlashUntil = 0; this.rivalTaunt = false; this.$('#ride-comic').hidden = true; this.message(this.profile.start); this.prepareOpponent(); }
+  enter() { this.siOpeningIndex=-1;this.engine.setCharacter(this.character); this.stage.setCharacter(this.character); super.enter(); this.comicUntil = this.nextQuipAt = 0; this.openingIndex = -1; this.pickupFlashUntil = 0; this.rivalTaunt = false; this.$('#ride-comic').hidden = true; this.message(this.profile.start); this.prepareOpponent(); }
   start(restart = false) {
     if (this.rivalLoading) return;
     const resume = this.engine.state === 'paused' && !restart;
@@ -60,8 +62,27 @@ export class RideGame extends RaftGame {
       this.$('#ride-comic').hidden = true; this.comicUntil = 0;
       this.nextQuipAt = 0; this.openingIndex = -1; this.pickupFlashUntil = 0; this.rivalTaunt = false;
       this.rivalQuipIndex = 0;
+      this.siOpeningIndex=-1;
+      this.endingStarted=false;this.endingClock=0;
       this.message(this.profile.start);
     }
+  }
+
+  message(text,mood=null){
+    if(!this.raceDialogue){super.message(text);return;}
+    const e=this.engine,pet=/^(龍泡泡|小聰明)[：:]/.test(text);
+    const feeling=mood||(pet&&e.petGrudge>=3?'angry':null);
+    this.messageUntil=e.elapsed+this.raceDialogue.set(text,e.elapsed,this.character,feeling);
+  }
+
+  gameplayLine(events){
+    if(events.some(event=>event.type==='jump-fail'))return this.engine.isZhuang?'龍泡泡：坑我就算了，還真有坑？！':'小聰明：領墨水怎麼還要填坑？！';
+    if(events.some(event=>event.type==='grudge'))return this.engine.isZhuang?'龍泡泡：剛剛三根柱子，我都有記。':'小聰明：三次了！這筆帳我記住了！';
+    if(events.some(event=>event.type==='jump'))return this.engine.isZhuang?'龍泡泡：還好，我沒——等、等等！！':'小聰明：你過去了，我呢？！';
+    if(events.some(event=>event.type==='jump-warning'))return '系統：對準黃色跳板，保留速度！';
+    if(events.some(event=>event.type==='jump-land'))return this.engine.isZhuang?'莊：過來了。龍泡泡：我的靈魂還沒！':'祀：一筆帶過。小聰明：帶的是我啊！';
+    if(events.some(event=>event.type==='grudge-calm'))return this.engine.isZhuang?'龍泡泡：先原諒一根柱子。':'小聰明：這段還行，先不告狀。';
+    const gap=events.find(event=>event.type==='gap');return gap?gapLines[gap.band]:null;
   }
   render() {
     super.render();
@@ -89,6 +110,7 @@ export class RideGame extends RaftGame {
       this.$('#ride-result').textContent = `${e.elapsed.toFixed(1)} 秒 · 最高 ${(e.topSpeed * 3.6).toFixed(0)} km/h\n龍泡泡：地上撞 ${e.petGroundBumps} 次／天上撞 ${e.petAirBumps} 次\n${ending}\n${e.rival.enabled ? '祀 AI 對戰' : '單人故事模式'}`;
     }
     if (this.rivalLoading) { this.$('#ride-start').disabled = true; if (this.ready) this.$('#ride-start').textContent = '祀正在上車…'; }
+    if(e.state==='won'&&!this.endingStarted){this.endingStarted=true;this.endingClock=0;this.message('小聰明：妳也是來休息的？龍泡泡：她是。我不是。');}
     for (const button of this.root.querySelectorAll('[data-rider]')) button.setAttribute('aria-pressed', String(button.dataset.rider === this.character));
   }
 
@@ -117,9 +139,11 @@ export class RideGame extends RaftGame {
     if (!this.active) return;
     const e = this.engine, before = e.state, p = this.profile;
     e.update(delta, this.input); this.stage.update(e, delta * e.timeScale);
+    this.raceDialogue.update(e.elapsed);
     const events = e.takeEvents();
     if (e.isZhuang) {
       this.updateZhuang(events);
+      if(e.state==='won'){this.endingClock+=delta;this.raceDialogue.update(e.elapsed+this.endingClock);this.$('#ride-line').hidden=false;}
       if (before !== e.state) { this.clearInput(); this.render(); }
       return;
     }
@@ -134,9 +158,13 @@ export class RideGame extends RaftGame {
       else if (event.type === 'collision') { this.message(p.bump); this.comic(`咚！撞到${event.kind}`, this.character === 'si' ? '御筆飛行 → 御筆撞牆' : '人還在上班，椅子已離職'); }
     }
     if (!events.length && e.state === 'playing' && e.elapsed > (this.messageUntil || 0)) this.message(p.idle[Math.floor(e.elapsed / 5) % p.idle.length]);
+    const siBeat=siOpeningDialogue.findLastIndex(line=>e.elapsed>=line.at);
+    if(e.elapsed<14&&siBeat!==this.siOpeningIndex){this.siOpeningIndex=siBeat;this.message(siOpeningDialogue[siBeat].line);}
+    const gameplay=this.gameplayLine(events);if(gameplay)this.message(gameplay);
     if (e.elapsed >= (this.comicUntil || 0)) this.$('#ride-comic').hidden = true;
     this.updateMeters();
     this.root.dataset.boost = String(e.boost > 0 || e.gasTime > 0);
+    if(e.state==='won'){this.endingClock+=delta;this.raceDialogue.update(e.elapsed+this.endingClock);this.$('#ride-line').hidden=false;}
     if (before !== e.state) { this.clearInput(); this.render(); }
   }
   updateZhuangMeters() {
@@ -148,8 +176,8 @@ export class RideGame extends RaftGame {
     this.root.querySelector('.raft-hud small').textContent = phase?.title || '龍泡泡兜風';
     this.$('#ride-distance').textContent = `${Math.floor(e.progress / e.config.length * 100)}%${e.prizeRemaining !== null ? ` · 領獎 ${e.prizeRemaining.toFixed(1)}s` : ''}`;
     const gap = Math.round(e.rival.progress - e.progress);
-    const rivalMove = e.rival.burst ? ' · 收筆！' : e.rival.cornering ? ' · 壓彎' : '';
-    this.$('#ride-score').textContent = e.rival.enabled ? e.rival.finished ? '祀已衝線' : (gap > 0 ? `祀領先 ${gap}m` : `領先祀 ${-gap}m`) + rivalMove : `泡泡 ${e.petBumps} 撞`;
+    const rivalMove = e.rival.windup ? ' · 蓄墨' : e.rival.burst ? ' · 收筆！' : e.rival.cornering ? ' · 壓彎' : '';
+    this.$('#ride-score').textContent = e.rival.enabled ? e.rival.finished ? '祀已衝線' : (gap > 0 ? `祀領先 ${gap}m` : `領先祀 ${-gap}m`) + rivalMove : e.petGrudge>=3?`泡泡記仇 ${e.petGrudge}`:`泡泡 ${e.petBumps} 撞`;
     this.$('#ride-speed').textContent = `${(e.speed * 3.6).toFixed(0)} km/h`;
     this.$('#ride-drift-meter').value = e.charge;
     const locked = e.elapsed < zhuangRace.raceAt;
@@ -174,16 +202,21 @@ export class RideGame extends RaftGame {
       const index = openingDialogue.findLastIndex(line => e.elapsed >= line.at);
       if (index !== this.openingIndex) { this.openingIndex = index; this.message(openingDialogue[index].line); this.messageUntil = e.elapsed + 2.8; }
     } else if (!story && e.rival.enabled && !this.rivalTaunt && e.elapsed >= 15 && e.elapsed < 22) {
-      this.message('祀：阿莊，獎品我先收下囉。'); this.rivalTaunt = true; this.nextQuipAt = e.elapsed + 4;
+      this.message('祀：本來只領墨水，獎品我也要。'); this.rivalTaunt = true; this.nextQuipAt = e.elapsed + 4;
     } else if (!story && e.takeoffPending && e.elapsed >= this.messageUntil) {
       this.message('點右下 ⇧ 起飛，龍泡泡不負責降落！');
     } else if (!story && e.elapsed >= this.nextQuipAt && e.state === 'playing') {
       const hit = events.find(event => event.type === 'pet-hit' || event.type === 'collision');
-      const rival = ['finish', 'passed', 'pass', 'near', 'burst'].map(action => events.find(event => event.type === 'rival' && event.action === action)).find(Boolean);
-      if (rival) { this.message(rivalLines[rival.action][this.rivalQuipIndex++ % 2]); this.nextQuipAt = e.elapsed + 4; }
+      const gameplay=this.gameplayLine(events);
+      const rival = ['finish', 'passed', 'pass', 'near', 'windup', 'burst'].map(action => events.find(event => event.type === 'rival' && event.action === action)).find(Boolean);
+      if(gameplay){this.message(gameplay);this.nextQuipAt=Math.max(e.elapsed+4,this.messageUntil+.5);}
+      else if (rival) { this.message(rivalLines[rival.action][this.rivalQuipIndex++ % 2]); this.nextQuipAt = e.elapsed + 4; }
       else if (hit) { this.message(impactLines[hit.kind] || '龍泡泡：撞的是我！！'); this.nextQuipAt = e.elapsed + 4; }
       else if (events.some(event => event.type === 'gas')) { this.message('莊：獎品，我拿定了。'); this.nextQuipAt = e.elapsed + 4; }
     }
+    // A jump or finish-gap cue must survive collision chatter / quip cooldowns.
+    const urgent=events.filter(event=>['jump-warning','jump','jump-fail','grudge','gap'].includes(event.type));
+    if(urgent.length&&!e.takeoffPending&&e.elapsed>=zhuangRace.raceAt){this.message(this.gameplayLine(urgent));this.nextQuipAt=Math.max(e.elapsed+4,this.messageUntil+.5);}
     if (events.some(event => event.type === 'pickup')) this.pickupFlashUntil = e.elapsed + 1.2;
     this.$('#ride-line').hidden = e.elapsed >= this.messageUntil || e.state !== 'playing';
     this.updateZhuangMeters();

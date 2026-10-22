@@ -166,10 +166,11 @@ async function loadModel(url, label, isDefault = false, characterKey='si') {
     document.querySelector('#model-credit').open = false;
     if(character){
       document.querySelector('#source-model-link').href=character.source;document.querySelector('#source-model-link').textContent=character.sourceName;
-      document.querySelector('#source-description').textContent=characterKey==='si'?'原模型檔未改動；本站加入骨骼待機與原創互動':'原模型檔未改動；本區提供模型觀看與鏡頭操作';
+      document.querySelector('#source-description').textContent=characterKey==='si'?'原模型檔未改動；本站加入骨骼待機與原創互動':'原模型檔未改動；本站加入待機與龍泡泡陪伴';
       document.querySelector('#character-name').textContent=character.name;document.querySelector('#character-subtitle').textContent=character.subtitle;
     }
     camera.setModel(model.bounds, models.getShoePresets());
+    model.idle.setCompanionVisible?.(zone==='zhuang');
     cameraMode = 'full';
     document.querySelector('#full-body').disabled = false;
     document.querySelector('#back-view').disabled = false;
@@ -273,6 +274,7 @@ try {
   observer.observe(document.querySelector('.panel'));
   async function selectZone(next){
     if(graphicsLost||!['si','zhuang','hub','game','climb','escape','raft','ride'].includes(next))return;
+    models.current?.idle.setCompanionVisible?.(false);
     if(game?.active)game.leave();
     if(climb?.active)climb.leave();
     if(escapeGame?.active)escapeGame.leave();
@@ -298,6 +300,7 @@ try {
     const key=next==='ride'?ride.character:next==='zhuang'?'zhuang':'si',character=viewerConfig.characters[key];
     resize();
     if(models.current?.characterId===key){
+      models.current.idle.setCompanionVisible?.(next==='zhuang');
       loadPanel.hidden=true;camera.reset();game.setReady(key==='si'&&!!models.current.idle.leek&&!models.current.idle.transition&&!models.current.idle.reverse?.landing);showStatus(`${character.name} · 載入完成`);
       climb.setReady(next==='climb'&&key==='si'&&models.current.idle.supported);
       raft.setReady(next==='raft'&&key==='si'&&models.current.idle.supported);

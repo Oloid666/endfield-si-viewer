@@ -1,6 +1,6 @@
 import {
   BoxGeometry, BufferGeometry, CanvasTexture, ConeGeometry, CylinderGeometry,
-  Float32BufferAttribute, Group, LatheGeometry, Mesh, MeshBasicMaterial,
+  Float32BufferAttribute, Group, LatheGeometry, Mesh, MeshBasicMaterial, DoubleSide,
   PlaneGeometry, SphereGeometry, SRGBColorSpace, TorusGeometry, Vector2,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -23,7 +23,8 @@ function batch(owner, root) {
   }
 }
 
-function paintFace(owner, kind, panic) {
+function paintFace(owner, kind, mood) {
+  const panic = mood === 'panic', dead = mood === 'dead', angry = mood === 'angry', smug = mood === 'smug', blink = mood === 'blink';
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
   const c = canvas.getContext('2d');
   c.lineJoin = c.lineCap = 'round';
@@ -32,23 +33,26 @@ function paintFace(owner, kind, panic) {
     c.beginPath(); c.moveTo(12, 8); c.lineTo(244, 8); c.lineTo(230, 231); c.lineTo(210, 243); c.lineTo(181, 238); c.lineTo(143, 250); c.lineTo(109, 243); c.lineTo(70, 248); c.lineTo(27, 233); c.closePath(); c.fill();
     c.strokeStyle = '#547e3b'; c.lineWidth = 13;
     for (const side of [-1, 1]) {
-      c.save(); c.translate(128 + side * 61, 108); c.rotate(side * -.18);
+      c.save(); c.translate(128 + side * 61, 108); c.rotate(side * (angry ? .28 : -.18));
       c.beginPath(); c.moveTo(-27, -29); c.quadraticCurveTo(0, -14, 27, -31); c.stroke();
       c.lineWidth = panic ? 9 : 12; c.beginPath();
-      if (panic) c.ellipse(0, 10, 18, 27, 0, 0, Math.PI * 2);
+      if (dead) { c.moveTo(-17,-4); c.lineTo(17,24); c.moveTo(17,-4); c.lineTo(-17,24); }
+      else if(blink) { c.moveTo(-22,12); c.lineTo(22,12); }
+      else if (panic) c.ellipse(0, 10, 18, 27, 0, 0, Math.PI * 2);
+      else if(smug&&side<0){c.moveTo(-25,15);c.lineTo(21,-4);}
       else { c.moveTo(-25, 9); c.quadraticCurveTo(0, 30, 25, 7); }
       c.stroke(); c.restore();
     }
-    c.lineWidth = 10; c.beginPath(); c.moveTo(101, 188); c.quadraticCurveTo(126, panic ? 146 : 208, 155, 185); c.stroke();
+    c.lineWidth = 10; c.beginPath(); c.moveTo(101, 188); c.quadraticCurveTo(126, panic ? 146 : smug ? 222 : angry ? 170 : 208, 155, 185); c.stroke();
     c.globalAlpha = .25; c.lineWidth = 2;
     for (let i = 0; i < 11; i++) { c.beginPath(); c.moveTo(25 + i * 20, 17); c.lineTo(20 + i * 20, 225); c.stroke(); }
   } else {
     const gradient = c.createLinearGradient(0, 70, 0, 213); gradient.addColorStop(0, '#38a58e'); gradient.addColorStop(.55, '#9fc774'); gradient.addColorStop(1, '#eddb73');
     for (const side of [-1, 1]) {
-      const x = 128 + side * 64, top = panic ? 64 : 100;
+      const x = 128 + side * 64, top = panic ? 54 : dead || blink ? 173 : angry ? 95 : 100;
       c.fillStyle = gradient; c.strokeStyle = '#343a35'; c.lineWidth = 5;
       c.beginPath(); c.moveTo(x - 38, top); c.lineTo(x + 38, top); c.bezierCurveTo(x + 38, 222, x - 38, 222, x - 38, top); c.closePath(); c.fill(); c.stroke();
-      c.lineWidth = 14; c.beginPath(); c.moveTo(x - 39, top - 2); c.lineTo(x + 39, top - 2 + side * -3); c.stroke();
+      c.lineWidth = 14; c.beginPath(); c.moveTo(x - 39, top - 2); c.lineTo(x + 39, top - 2 + side * (angry ? 26 : smug ? -18 : -3)); c.stroke();
       c.fillStyle = '#83bdb1'; c.beginPath(); c.ellipse(x + side * 2, 54, 13, 8, side * .15, 0, Math.PI * 2); c.fill();
     }
     c.strokeStyle = '#343a35'; c.lineWidth = 5; c.beginPath(); c.moveTo(108, 195); c.quadraticCurveTo(105, 213, 127, 202); c.quadraticCurveTo(147, 215, 150, 196); c.stroke();
@@ -77,11 +81,13 @@ export function buildCompanion(owner, kind) {
   const green = owner.material(0x84bba6), red = owner.material(0xba5043);
   const arms = [], ink = kind === 'ink';
   if (ink) {
-    owner.mesh(sphere, black, fixed, [0, .65, -.07], [.57, .69, .51]);
-    owner.mesh(sphere, black, fixed, [0, 1.12, -.04], [.79, .74, .68]);
+    owner.mesh(sphere, black, fixed, [0, .47, -.08], [.43, .43, .37]);
+    owner.mesh(sphere, black, fixed, [0, 1.13, -.03], [.76, .68, .62]);
+    // Rounded ink silhouette around a raised, thick paper face, not a hanging strip.
+    facePanel(owner,owner.material(0xdbd9be,{side:DoubleSide}),fixed,1.14,1.13,[0,.98,.61]);
     for (const side of [-1, 1]) {
-      arms.push(owner.mesh(sphere, black, root, [side * .71, .55, .01], [.4, .13, .2]));
-      const foot = owner.mesh(cone, black, fixed, [side * .3, .12, .18], [.18, .4, .2]); foot.rotation.z = side * -.25;
+      arms.push(owner.mesh(sphere, black, root, [side * .69, .75, .13], [.29, .17, .19]));
+      const foot = owner.mesh(cone, black, fixed, [side * .28, .12, .23], [.19, .32, .27]); foot.rotation.z = side * -.25;
     }
   } else {
     owner.mesh(sphere, white, fixed, [0, .94, 0], [.9, .9, .79]);
@@ -98,11 +104,14 @@ export function buildCompanion(owner, kind) {
     owner.mesh(ribbon, white, fixed, [.78, 1.45, .16], [.16, .19, .07]).rotation.z = .3;
   }
   batch(owner, fixed);
-  const maps = [paintFace(owner, kind, false), paintFace(owner, kind, true)];
+  const moods = ['calm','panic','smug','angry','dead','blink'];
+  const maps = moods.map(mood => paintFace(owner, kind, mood));
   const material = owner.own(new MeshBasicMaterial({ map: maps[0], transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }));
-  const face = facePanel(owner, material, root, ink ? 1.02 : 1.5, ink ? 1 : 1.03, ink ? [0, .65, .68] : [0, .96, .8]);
-  const tail = owner.mesh(cone, ink ? black : green, root, [0, .38, -.68], [ink ? .28 : .18, ink ? 1 : .6, .23]); tail.rotation.x = -1.1;
-  return { root, arms, tail, face, maps };
+  const face = facePanel(owner, material, root, ink ? 1.13 : 1.5, ink ? 1.12 : 1.03, ink ? [0, .98, .635] : [0, .96, .8]);
+  const tail = new Group();root.add(tail);tail.position.set(0,.38,-.55);
+  owner.mesh(cone, ink ? black : green, tail, [0,0,0], [ink ? .27 : .18, ink ? 1 : .6, .23]).rotation.x=-1.1;
+  if(ink)for(let i=0;i<3;i++)owner.mesh(sphere,black,tail,[Math.sin(i*3)*.09,-i*.09,-.22-i*.23],[.2-i*.045,.16-i*.035,.24-i*.04]);
+  return { root, arms, tail, face, maps, moods, kind };
 }
 
 // Bamboo shaft, ivory ferrule, tapered ink-loaded bristles. The silhouette is
@@ -130,5 +139,14 @@ export function buildFlyingBrush(owner) {
     const ink = owner.mesh(stroke, i % 2 ? jade : dark, root, [(i - 1.5) * .14, .6 + i % 2 * .13, 3.5 + i * .22]);
     ink.rotation.x = Math.PI / 2; flames.push(ink);
   }
-  return { root, seat, mount, flames };
+  const charge=owner.mesh(owner.own(new TorusGeometry(.4,.045,5,20)),owner.own(new MeshBasicMaterial({color:0xb2f4db,transparent:true,opacity:.85,depthWrite:false})),root,[0,.65,-2.25]);charge.visible=false;
+  return { root, seat, mount, flames, charge };
+}
+
+// Called by the existing viewer/game frame loop; all meshes and maps are reused.
+export function animateCompanion(prop, time, {mood='calm',wave=0,blink=0,stress=0}={}) {
+  const index=prop.moods.indexOf(blink>.65?'blink':mood);prop.face.material.map=prop.maps[Math.max(0,index)];
+  prop.face.rotation.x=prop.kind==='ink'?Math.sin(time*6)*stress*.12:0;
+  prop.arms.forEach((arm,i)=>{arm.rotation.z=Math.sin(time*(stress?17:5)+i*2)*(.2+wave*.7+stress*.5);});
+  prop.tail.rotation.z=Math.sin(time*7)*(.18+stress*.25);
 }

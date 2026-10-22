@@ -3,7 +3,7 @@ import { RaftStage } from './RaftStage.js';
 import { SeatedRider } from './SeatedRider.js';
 import { RideOpponent } from './RideOpponent.js';
 import { rideConfig, rideProfiles, zhuangRideConfig } from '../config/rideConfig.js';
-import { buildCompanion, buildFlyingBrush } from './RideProps.js';
+import { buildCompanion, buildFlyingBrush, animateCompanion } from './RideProps.js';
 import { takeoverBlend, zhuangRace } from './ZhuangRaceStory.js';
 
 // A fan-made flying brush and a runaway office chair, not official assets.
@@ -23,7 +23,7 @@ export class RideStage extends RaftStage {
     const orange = this.material(0xf4aa56, { emissive: 0xaf5818, emissiveIntensity: .3 });
     const cushion = this.material(0x344d49);
     const brush = buildFlyingBrush(this);
-    this.brush = brush.root; this.brushSeat = brush.seat; this.brushMount = brush.mount; this.flames = brush.flames;
+    this.brush = brush.root; this.brushSeat = brush.seat; this.brushMount = brush.mount; this.flames = brush.flames;this.brushCharge=brush.charge;
     this.chair = new Group(); this.raft.add(this.brush, this.chair);
     this.chairSeat = new Group(); this.chairSeat.position.y = .85; this.chair.add(this.chairSeat);
     this.chairMount = new Group(); this.chairSeat.add(this.chairMount);
@@ -162,15 +162,23 @@ export class RideStage extends RaftStage {
     for (let i = 0; i <= segments; i++) {
       const s = -25 + i * 5, x = this.center(s);
       vertices.push(x - half, .065, -s, x + half, .065, -s);
-      if (i) { const j = i * 2; indices.push(j - 2, j - 1, j, j - 1, j + 1, j); }
+      const inGap=c.jumps.some(j=>s>j.gapStart&&s<=j.gapEnd);
+      if (i&&!inGap) { const j = i * 2; indices.push(j - 2, j - 1, j, j - 1, j + 1, j); }
       const angle = -Math.atan(this.center(s + .5) - this.center(s - .5));
-      if (i % 2 === 0) for (const offset of [-3.5, 3.5]) marks.push({ p: [x + offset, .08, -s], s: [.12, .015, 3], r: [0, angle, 0] });
+      if (i % 2 === 0&&!inGap) for (const offset of [-3.5, 3.5]) marks.push({ p: [x + offset, .08, -s], s: [.12, .015, 3], r: [0, angle, 0] });
       if (i % 2 === 0) for (const side of [-1, 1]) rail.push({ p: [x + side * (half + .1), .42, -s], s: [.2, .8, 2], r: [0, angle, 0] });
     }
     const geometry = this.own(new BufferGeometry()); geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3)); geometry.setIndex(indices); geometry.computeVertexNormals();
     this.mesh(geometry, this.material(0x414f50), this.root);
     this.instances(box, this.material(0xdfdeba), marks);
     this.instances(box, this.material(0xd6be76), rail);
+    for(const j of c.jumps){
+      this.mesh(box,this.material(0x102d2a),this.root,[this.center((j.gapStart+j.gapEnd)/2),-.02,-(j.gapStart+j.gapEnd)/2],[half*2,.1,j.gapEnd-j.gapStart]);
+      const ramp=this.mesh(box,this.material(0xc4b261),this.root,[this.center(j.s),.24,-j.s],[j.width,.4,6]);ramp.rotation.x=.1;
+      for(let i=0;i<3;i++)for(const side of [-1,1]){const arrow=this.mesh(box,this.material(0xf5f1c6),this.root,[this.center(j.s)+side*.36,.49,-j.s+1.7-i*1.4],[.12,.03,1]);arrow.rotation.y=side*.7;}
+      const canvas=document.createElement('canvas');canvas.width=384;canvas.height=96;const ctx=canvas.getContext('2d');ctx.fillStyle='#334735';ctx.fillRect(0,0,384,96);ctx.fillStyle='#fff0ad';ctx.font='bold 38px sans-serif';ctx.textAlign='center';ctx.fillText('↑ 對準跳板・保留速度',192,62);
+      this.mesh(this.own(new PlaneGeometry(4,.999)),this.own(new MeshBasicMaterial({map:this.own(new CanvasTexture(canvas))})),this.root,[this.center(j.s-40)+half-1,2.5,-j.s+40]);
+    }
     this.obstacleRoot.removeFromParent(); this.obstacleRoot = null;
     for (const obstacle of c.obstacles) {
       const x = this.center(obstacle.s) + obstacle.offset;
@@ -365,7 +373,8 @@ export class RideStage extends RaftStage {
     const spin = Math.sin(time * 12) * engine.hit * (si ? .4 : .25);
     const takeover = si ? 0 : takeoverBlend(engine.elapsed);
     seat.rotation.y += (Math.PI * (1 - takeover) + spin - seat.rotation.y) * (1 - Math.exp(-dt * 4));
-    this.rider.update(time, engine.heading, engine.hit, si ? null : { determined: takeover, magic: engine.gasTime > 0 || engine.flying });
+    this.rider.update(time, engine.heading, engine.hit, si ? {jump:engine.jumpHeight()}: { determined: takeover, magic: engine.gasTime > 0 || engine.flying, story:engine.storyPhase, jump:engine.jumpHeight(),grudge:engine.petGrudge });
+    this.brushCharge.visible=si&&engine.gasTime>0;
     this.renderSpeed = engine.speed; this.jetting = engine.boost > 0 || engine.gasTime > 0 || engine.flying;
     for (const flame of this.flames) flame.scale.y = (engine.state === 'playing' ? .9 + Math.sin(time * 34) * .16 + (engine.gasTime ? 3 : engine.boost ? 1.8 : 0) : .4);
     // Base stage writes the rope after this hook; height correction follows in update.
@@ -373,7 +382,8 @@ export class RideStage extends RaftStage {
     this.warning.rotation.z = Math.sin(time * 16) * engine.hit * .5;
     this.pickupMeshes.forEach((mesh, i) => { mesh.visible = !engine.pickups.has(i); mesh.position.y = 1.1 + (this.config.pickups[i].s >= zhuangRace.flightAt && !si ? zhuangRace.flightHeight : 0) + Math.sin(time * 3 + i) * .14; mesh.rotation.y = si ? time * 1.5 : 0; if (mesh.userData.cube) mesh.userData.cube.rotation.y = time * 1.5; if (mesh.userData.label) mesh.userData.label.quaternion.copy(this.scene.camera.quaternion); });
     const prop = si ? this.inkProp : this.dragonProp;
-    prop.face.material.map = prop.maps[engine.hit > .1 || engine.gasTime > 0 || (!si && engine.pet.hit > .1) ? 1 : 0];
+    animateCompanion(prop,time,{mood:engine.petMood,wave:!si&&engine.takeoffPending?1:0,stress:engine.pet.hit+ (engine.gasTime>0 ? .5 : 0),blink:Math.max(0,1-Math.abs(time%5-.15)/.1)});
+    if(!si&&engine.takeoffPending)prop.root.rotation.y=Math.sin(time*18)*.25;
     this.petBody.scale.set(.85 + engine.hit * .2, .85 - engine.hit * .25, .85 + engine.hit * .2);
   }
 
@@ -381,7 +391,7 @@ export class RideStage extends RaftStage {
     super.update(engine, delta);
     if (!this.active) return;
     const rope = this.rope.geometry.attributes.position;
-    const petHeight = engine.isZhuang ? engine.pet.y - .6 : 0;
+    const petHeight = engine.pet.y - .6;
     for (let i = 0; i < rope.count; i++) {
       const a = i / (rope.count - 1);
       rope.setY(i, rope.getY(i) + this.ropeHeight + engine.height * (1 - a) + petHeight * a);
@@ -389,6 +399,7 @@ export class RideStage extends RaftStage {
     }
     rope.needsUpdate = true;
     this.pet.position.y += this.profile.hover + .2;
+    if(!engine.isZhuang)this.pet.position.y+=engine.jumpHeight(.25);
     if (engine.isZhuang) {
       this.pet.position.y = engine.pet.y;
       const dt = engine.state === 'playing' ? Math.min(delta, .12) : 0;

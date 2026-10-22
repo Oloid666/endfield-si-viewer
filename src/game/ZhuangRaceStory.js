@@ -14,9 +14,15 @@ export const openingDialogue = [
   { at: 2.6, line: '龍泡泡：給我出來兜風休息！' },
   { at: 5, line: '莊：我就坐一下，不參賽。' },
 ];
+export const siOpeningDialogue=[
+  {at:0,line:'祀：繞一圈，領墨水，回家。'},
+  {at:3,line:'小聰明：領墨水需要戴安全帽嗎？'},
+  {at:7,line:'廣播：冠軍獎品，管理員親自頒發！'},
+  {at:10,line:'祀：……參加獎突然不香了。'},
+];
 export const zhuangBeats = {
   drag: { title: '龍泡泡強制下班', line: openingDialogue[0].line },
-  sponsor: { title: '冠軍獎品揭曉', line: '廣播：冠軍獎品，由管理員贊助！' },
+  sponsor: { title: '冠軍獎品揭曉', line: '廣播：冠軍獎品，管理員贊助並親自頒發！' },
   takeover: { title: '莊芳宜接管', line: '莊：……管理員？龍泡泡，坐穩。' },
   race: { title: '莊芳宜暴走', line: '龍泡泡：說好的不參賽呢？！' },
   impatient: { title: '領獎快截止了', line: '莊：獎品要被搬走了，來不及。' },
@@ -42,6 +48,12 @@ export const rivalLines = {
   near: ['祀：要不要幫你的椅子畫對翅膀？', '龍泡泡：她側著坐都比你快！'],
   burst: ['祀：收筆——先收獎品！', '小聰明：這筆畫超出格子了！！'],
   finish: ['祀：管理員，獎品我先簽收囉。', '小聰明：贏了！這次不用當拖把了！'],
+  windup:['祀：收筆前，先跟上喔。','小聰明：她抬手了！先抓繩子！！'],
+};
+export const gapLines={
+  ahead:'莊：獎品先替我包好。',
+  behind:'祀：阿莊，別急著下班。',
+  close:'莊：妳先鬆手。祀：妳先收筆。',
 };
 export function zhuangPhase(elapsed, progress, won = false, flying = false) {
   if (won) return 'finish';

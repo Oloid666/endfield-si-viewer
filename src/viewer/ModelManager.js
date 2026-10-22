@@ -3,6 +3,7 @@ import { IdleController } from './IdleController.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { LoaderUtils } from 'three';
 import { transferGLB } from './ModelTransfer.js';
+import { ZhuangIdleController } from './ZhuangIdleController.js';
 
 export class ModelManager {
   constructor(scene, config) {
@@ -46,7 +47,8 @@ export class ModelManager {
         const byNode=id=>{let found;gltf.scene.traverse(node=>{if(gltf.parser.associations.get(node)?.nodes===id)found=node;});return found;};
         this.current.viewAnchors={head:byNode(options.viewNodes.head),feet:options.viewNodes.feet.map(byNode).filter(Boolean)};
       }
-      this.current.idle = new IdleController(gltf, this.config.idle, this.current.bounds, actor, this.config.face, this.config.gaze, this.config.interactions.photography);
+      this.current.idle = options.characterId === 'zhuang' ? new ZhuangIdleController(gltf, this.current.bounds, this.scene)
+        : new IdleController(gltf, this.config.idle, this.current.bounds, actor, this.config.face, this.config.gaze, this.config.interactions.photography);
       this.scene.add(group);
       return this.current;
     } catch (error) { this.release(group); throw error; }
@@ -72,7 +74,7 @@ export class ModelManager {
 
   setIdlePlaying(playing) { this.current?.idle.setPlaying(playing); }
 
-  playGesture(cameraPosition, kind) { return this.current?.idle.playGesture(cameraPosition, kind); }
+  playGesture(cameraPosition, kind) { return this.current?.idle.playGesture?.(cameraPosition, kind) ?? false; }
 
   getReverseBounds() {
     if (!this.current) return null;

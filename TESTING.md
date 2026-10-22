@@ -1,3 +1,13 @@
+# 展示陪伴、四人頭像、跳板與競速情緒（2026-10-22）
+
+- `npm test`：136 項通過，包含原有全部功能。新增真實莊骨架待機／12 個眼皮控制點／暫停／自有道具釋放、跳板命中與未命中／跟班延遲／一次失誤救回、記仇與乾淨駕駛消氣、實際差距台詞去重、多人說話者拆分與表情判定；更新 AI 收筆預告先於噴射的驗證。
+- 正式 Repository 子路徑 `VITE_BASE_PATH=/endfield-si-viewer/ npm run build` 通過。維持一個 Renderer／Canvas／主循環，無新依賴、後處理或新下載模型。原始兩份 GLB 的 SHA-256 未變。
+- Chromium／SwiftShader 390×844、844×390：實際兩份 GLB、莊展示陪伴／暫停／切換場景還原、全部 20 個頭像狀態、墨水故事、AI 預告、記仇、跳板成功／失誤恢復、角色切換、暫停／重玩及單一 Canvas 通過，無未捕捉 JavaScript 錯誤。跳板、近身和整局策略驗證使用測試 response 注入的固定步長快轉，不包含在產品；不是實體 iPhone FPS 測量。
+- 實際載入 GLB 的整局策略驗證亦通過：58.38 秒獲勝、11 次甩尾、7 個補給；結算時兩隻跟班逐句切換頭像，頭像位於結果卡片外，不被卡片遮住。AI 小聰明的掛繩、關閉後還原父層及再切回祀亦通過。
+- 畫面：[莊與龍泡泡](docs/screenshots/cast-zhuang-display.png)、[說話頭像](docs/screenshots/cast-dialogue-mobile.png)、[跳板](docs/screenshots/cast-jump-mobile.png)、[記仇](docs/screenshots/cast-grudge-mobile.png)、[結算接話](docs/screenshots/cast-ending-mobile.png)。
+- 圖集由現有模型與程序跟班離線渲染，再以 Canvas 畫漫畫五官，遊戲中只切靜態圖；未建立角色頭像的即時 WebGL 視窗。小聰明曲面紙面曾遮住部分眼睛，已經由實際渲染檢查並修正。
+- 尚未測試：實體 iPhone Safari 的效能、熱負載及觸控手感；原生 Safari／Edge、VoiceOver。完整變更見 `docs/CAST-RACE-CHANGES.md`。
+
 # 認真祀 AI、側坐水墨毛筆與競速互動（2026-10-22）
 
 - `npm test`：131 項通過。新增強度驗證：不操作 73.47 秒、只用加速 70.23 秒皆輸，祀固定約 63.54 秒完賽；每 0.18 秒才判斷一次左右按鍵、控線收集補給並甩尾的規則測試 58.38 秒獲勝，零撞牆、11 次甩尾、7 個補給。這是自動化有效按鍵策略，不是人類試玩或手機 FPS。兩種失誤策略下 AI 衝線時間一致，沒有橡皮筋追趕或瞬移。
