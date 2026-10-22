@@ -1,5 +1,5 @@
 import { RaftEngine } from './RaftEngine.js';
-import { rideConfig, zhuangRideConfig } from '../config/rideConfig.js';
+import { rideConfig, zhuangRideConfig, rivalRideConfig } from '../config/rideConfig.js';
 import { flightHeight, takeoverBlend, zhuangPhase, zhuangRace } from './ZhuangRaceStory.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -14,7 +14,12 @@ export class RideEngine extends RaftEngine {
   get flying() { return this.isZhuang && this.flightStarted !== null; }
   get timeScale() { return this.isZhuang && this.takeoffPending ? zhuangRace.decisionScale : 1; }
   get prizeRemaining() { return this.prizeDeadline === null ? null : Math.max(0, this.prizeDeadline - this.prizeClock); }
-  setOpponent(enabled) { this.rivalEnabled = !!enabled; this.rival = { enabled: this.isZhuang && !!enabled, progress: 0, speed: 14, offset: -3, clock: 0, finished: false, finishTime: null }; }
+  setOpponent(enabled) {
+    this.rivalEnabled = !!enabled;
+    this.rival = { enabled: this.isZhuang && !!enabled, progress: 0, speed: rivalRideConfig.introSpeed, offset: -rivalRideConfig.lane, clock: 0,
+      finished: false, finishTime: null, burst: 0, nextBurst: zhuangRace.raceAt + 1, bursts: 0, cornering: false,
+      lead: 0, nextQuip: zhuangRace.raceAt + 5, reactionUntil: 0, reaction: null, near: false };
+  }
   get height() { return this.flying ? flightHeight(this.elapsed - this.flightStarted) : 0; }
 
 
@@ -66,16 +71,36 @@ export class RideEngine extends RaftEngine {
   }
 
   updateOpponent(dt) {
-    const r = this.rival;
+    const r = this.rival, c = rivalRideConfig;
     if (!r.enabled || r.finished) return;
     r.clock += dt;
-    const target = this.elapsed < zhuangRace.raceAt ? 15 : 39.5 + Math.sin(r.clock * .7) * 1.5;
-    const bend = Math.min(.15, Math.abs(this.curvature(r.progress)) * 10);
-    r.speed += (target * (1 - bend) - r.speed) * (1 - Math.exp(-dt * 2));
-    const lane = Math.abs(r.progress - this.progress) < 12 && this.offset < 0 ? 3 : -3;
+    r.burst = Math.max(0, r.burst - dt);
+    const bend = Math.max(...[0, 15, 30].map(ahead => Math.abs(this.curvature(r.progress + ahead))));
+    r.cornering = bend > c.straightCurvature;
+    const racing = r.clock >= zhuangRace.raceAt;
+    if (racing && !r.cornering && r.clock >= r.nextBurst && !r.burst) {
+      r.burst = c.burstSeconds; r.nextBurst = r.clock + c.burstCooldown; r.bursts++;
+      if (Math.abs(r.progress - this.progress) < 80) this.emit('rival', { action: 'burst' });
+    }
+    const target = racing ? Math.min(c.maxSpeed, c.cruiseSpeed * (1 - Math.min(c.cornerLoss, bend * 12)) + (r.burst ? c.burstSpeed : 0)) : c.introSpeed;
+    r.speed += (target - r.speed) * (1 - Math.exp(-dt * c.acceleration));
+    // Choose a passing lane, then ease across it. Neither racer can block the other.
+    const lane = Math.abs(r.progress - this.progress) < 22 ? (this.offset < 0 ? c.lane : -c.lane) : -Math.sign(this.curvature(r.progress + 15) || 1) * c.lane;
     r.offset += (lane - r.offset) * (1 - Math.exp(-dt * 2));
     r.progress = Math.min(this.config.length, r.progress + r.speed * dt);
-    if (r.progress >= this.config.length) { r.finished = true; r.finishTime = this.prizeClock; }
+    const gap = r.progress - this.progress;
+    const lead = gap > c.passMargin ? 1 : gap < -c.passMargin ? -1 : r.lead;
+    const near = Math.abs(gap) < 14;
+    if (racing && r.clock >= r.nextQuip && (lead !== r.lead || (near && !r.near))) {
+      r.reaction = lead !== r.lead ? lead > 0 ? 'pass' : 'passed' : 'near';
+      r.reactionUntil = r.clock + 2.4; r.nextQuip = r.clock + c.quipCooldown;
+      this.emit('rival', { action: r.reaction });
+    }
+    r.lead = lead; r.near = near;
+    if (r.progress >= this.config.length) {
+      r.finished = true; r.finishTime = this.prizeClock;
+      this.emit('rival', { action: 'finish' });
+    }
   }
 
   curvature(s) {

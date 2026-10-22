@@ -64,18 +64,25 @@ export const zhuangRideConfig = {
   airHazards: [1985, 2080, 2175, 2270, 2365, 2460, 2545].flatMap(s => [-1, 1].map(side => ({ s, offset: side * 5.5, height: 6.8, width: 8, tall: 3, name: side < 0 ? '反內卷結界' : '空中考勤' }))),
 };
 
+// A repeatable opponent pace: no rubber-banding or position-based speed bonus.
+export const rivalRideConfig = {
+  introSpeed: 15, cruiseSpeed: 48, maxSpeed: 58, acceleration: 2.2,
+  cornerLoss: .2, burstSpeed: 10, burstSeconds: 2, burstCooldown: 6,
+  straightCurvature: .0025, lane: 2.5, passMargin: 5, quipCooldown: 8,
+};
+
 export const rideProfiles = {
   si: {
-    name: '祀', vehicle: '漂浮迷你帝江號', companion: '小聰明', hover: .95,
+    name: '祀', vehicle: '側坐水墨毛筆', companion: '小聰明', hover: .95,
     source: 'https://sketchfab.com/3d-models/si-arknights-endfield-304e5f23db204cbd834b44138ca570d7',
-    title: '帝江號，怎麼祀你在開？',
-    intro: '900 公尺寬路甩尾！祀坐迷你帝江號，小聰明被迫當風箏。方向＋煞車蓄甩尾，放開噴射；氣態息壤可再加速。',
-    start: '祀：縮小了，應該不用申請航線吧。',
-    boost: '系統：航線未核准。　祀：那就飛快一點。',
-    bump: '小聰明：這不是帝江號，是抵牆號！！',
+    title: '筆祀誰開得快？',
+    intro: '祀側坐水墨毛筆，小聰明被迫當風箏。方向＋煞車蓄甩尾，放開噴射；氣態息壤可再加速。',
+    start: '祀：御筆飛行，也算寫作業吧。',
+    boost: '祀：收筆！　小聰明：我還沒收啊！！',
+    bump: '小聰明：你這不是寫意，是寫遺書！！',
     spin: '祀：船頭在哪？　小聰明：先問我在哪！！',
     finish: '小聰明：下次你掛在後面。',
-    idle: ['祀：這叫便攜式帝江號。　小聰明：我叫便攜式乘客嗎？', '系統：請勿將旗艦作為個人代步工具。', '祀：不用怕，我畫過說明書。　小聰明：你畫的？！'],
+    idle: ['祀：這叫筆走龍蛇。　小聰明：龍蛇在哪？我嗎？！', '系統：請勿將文具作為個人代步工具。', '祀：不用怕，我畫過駕照。　小聰明：你畫的？！'],
   },
   zhuang: {
     name: '莊芳宜', vehicle: '失控辦公椅', companion: '龍泡泡', hover: 0,

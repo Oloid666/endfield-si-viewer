@@ -36,6 +36,13 @@ export const impactLines = {
   '反內卷結界': '龍泡泡：反內卷，怎麼只反我？！',
   '空中考勤': '龍泡泡：飛上來也要打卡？！',
 };
+export const rivalLines = {
+  pass: ['祀：阿莊，獎品不等加班的人喔。', '小聰明：讓一讓，文具超車！'],
+  passed: ['祀：椅子怎麼比毛筆還快？！', '莊：借過。祀：不是，真借過啊？！'],
+  near: ['祀：要不要幫你的椅子畫對翅膀？', '龍泡泡：她側著坐都比你快！'],
+  burst: ['祀：收筆——先收獎品！', '小聰明：這筆畫超出格子了！！'],
+  finish: ['祀：管理員，獎品我先簽收囉。', '小聰明：贏了！這次不用當拖把了！'],
+};
 export function zhuangPhase(elapsed, progress, won = false, flying = false) {
   if (won) return 'finish';
   if (flying) return 'flight';

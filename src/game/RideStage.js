@@ -3,10 +3,10 @@ import { RaftStage } from './RaftStage.js';
 import { SeatedRider } from './SeatedRider.js';
 import { RideOpponent } from './RideOpponent.js';
 import { rideConfig, rideProfiles, zhuangRideConfig } from '../config/rideConfig.js';
-import { buildCompanion, buildMiniDijiang } from './RideProps.js';
+import { buildCompanion, buildFlyingBrush } from './RideProps.js';
 import { takeoverBlend, zhuangRace } from './ZhuangRaceStory.js';
 
-// A fan-made miniature ship and a runaway office chair, not official assets.
+// A fan-made flying brush and a runaway office chair, not official assets.
 export class RideStage extends RaftStage {
   constructor(scene, camera, models) {
     super(scene, camera, models, rideConfig);
@@ -22,9 +22,9 @@ export class RideStage extends RaftStage {
     const steel = this.material(0x46595b, { metalness: .45 });
     const orange = this.material(0xf4aa56, { emissive: 0xaf5818, emissiveIntensity: .3 });
     const cushion = this.material(0x344d49);
-    const mini = buildMiniDijiang(this);
-    this.ship = mini.root; this.shipSeat = mini.seat; this.shipMount = mini.mount; this.flames = mini.flames;
-    this.chair = new Group(); this.raft.add(this.ship, this.chair);
+    const brush = buildFlyingBrush(this);
+    this.brush = brush.root; this.brushSeat = brush.seat; this.brushMount = brush.mount; this.flames = brush.flames;
+    this.chair = new Group(); this.raft.add(this.brush, this.chair);
     this.chairSeat = new Group(); this.chairSeat.position.y = .85; this.chair.add(this.chairSeat);
     this.chairMount = new Group(); this.chairSeat.add(this.chairMount);
     this.pole = new Group();
@@ -328,12 +328,12 @@ export class RideStage extends RaftStage {
   }
   canAttach(model) {
     if (!model || model.characterId !== this.character) return false;
-    this.rider = new SeatedRider(model, this.character === 'si' ? this.shipMount : this.chairMount, this.config.actorHeight);
+    this.rider = new SeatedRider(model, this.character === 'si' ? this.brushMount : this.chairMount, this.config.actorHeight, { sideSaddle: this.character === 'si' });
     return this.rider.supported;
   }
   mountRider() {
     const si = this.character === 'si';
-    this.ship.visible = si; this.chair.visible = !si;
+    this.brush.visible = si; this.chair.visible = !si;
     this.inkBody.visible = si; this.dragon.visible = !si;
     this.petBody = si ? this.inkBody : this.dragon;
     this.arms = si ? this.inkArms : this.dragonArms;
@@ -344,7 +344,7 @@ export class RideStage extends RaftStage {
     this.shotUntil = this.lastTime = 0;
     // Start facing the viewer: the vehicles travel forwards, the passengers have
     // knowingly swivelled their seats backwards. A later spin reverses that gag.
-    this.shipSeat.rotation.y = this.chairSeat.rotation.y = Math.PI;
+    this.brushSeat.rotation.y = this.chairSeat.rotation.y = Math.PI;
   }
   restoreRider() { this.rider?.restore(); this.rider = null; }
 
@@ -361,7 +361,7 @@ export class RideStage extends RaftStage {
       this.lastSpins = engine.spins; this.lastBumps = engine.bumps;
       this.shotUntil = time + 1.4;
     }
-    const seat = si ? this.shipSeat : this.chairSeat;
+    const seat = si ? this.brushSeat : this.chairSeat;
     const spin = Math.sin(time * 12) * engine.hit * (si ? .4 : .25);
     const takeover = si ? 0 : takeoverBlend(engine.elapsed);
     seat.rotation.y += (Math.PI * (1 - takeover) + spin - seat.rotation.y) * (1 - Math.exp(-dt * 4));

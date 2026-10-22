@@ -1,7 +1,7 @@
 import { RaftGame } from './RaftGame.js';
 import { RideEngine } from './RideEngine.js';
 import { rideConfig, rideProfiles } from '../config/rideConfig.js';
-import { zhuangBeats, zhuangRace, openingDialogue, impactLines } from './ZhuangRaceStory.js';
+import { zhuangBeats, zhuangRace, openingDialogue, impactLines, rivalLines } from './ZhuangRaceStory.js';
 
 // Reuse held-touch controls and pause lifecycle; keep a distinct DOM / menu entry.
 export class RideGame extends RaftGame {
@@ -12,16 +12,16 @@ export class RideGame extends RaftGame {
     this.engine = new RideEngine(rideConfig);
     this.character = new URLSearchParams(location.search).get('rider') === 'zhuang' ? 'zhuang' : 'si';
     this.opponentEnabled = new URLSearchParams(location.search).get('ai') === '1';
-    this.opponentRequest = 0; this.rivalLoading = false; this.openingIndex = -1;
+    this.opponentRequest = 0; this.rivalLoading = false; this.openingIndex = -1; this.rivalQuipIndex = 0;
     this.$('#ride-card > small').textContent = `${rideConfig.length}m 寬路甩尾 · 三段路線`;
-    this.$('#ride-card').insertAdjacentHTML('afterbegin', `<div class="ride-picker" role="group" aria-label="選擇坐騎"><button data-rider="si">祀 · 迷你帝江號</button><button data-rider="zhuang">莊芳宜 · 辦公椅</button></div>`);
-    this.$('#ride-card .actions').insertAdjacentHTML('beforebegin', '<label id="ride-rival-option"><input id="ride-rival" type="checkbox">祀來搶獎品<small>電腦對手 · 關閉較省電 · 切換會重開本局</small></label><p id="ride-rival-status" role="status"></p>');
+    this.$('#ride-card').insertAdjacentHTML('afterbegin', `<div class="ride-picker" role="group" aria-label="選擇坐騎"><button data-rider="si">祀 · 側坐毛筆</button><button data-rider="zhuang">莊芳宜 · 辦公椅</button></div>`);
+    this.$('#ride-card .actions').insertAdjacentHTML('beforebegin', '<label id="ride-rival-option"><input id="ride-rival" type="checkbox">祀來搶獎品 · 認真模式<small>壓彎、出彎收筆加速 · 控線撿補給才有機會贏<br>關閉較省電 · 切換會重開本局</small></label><p id="ride-rival-status" role="status"></p>');
     this.$('#ride-rival').checked = this.opponentEnabled;
     this.onOpponentChange = () => { this.opponentEnabled = this.$('#ride-rival').checked; this.engine.reset(); this.clearInput(); this.stage.time = 0; this.stage.resetEffects(); this.openingIndex = -1; this.syncOpponentUrl(); this.prepareOpponent(); };
     this.$('#ride-rival').addEventListener('change', this.onOpponentChange);
     root.insertAdjacentHTML('beforeend', '<aside id="ride-prize" hidden aria-label="冠軍獎品公告"><span aria-hidden="true">🎁</span><small>冠軍獎品</small><strong>管理員贊助</strong><em>神祕獎品 · 僅限第一名</em></aside>');
     this.$('#ride-card .hint').innerHTML = '方向＋煞車：蓄甩尾Ⅰ／Ⅱ／Ⅲ，放開噴射<br>氣態息壤／E：道具噴射，最多帶兩罐<br>撞車會減速；暫停可換角色';
-    this.$('#ride-card details p').innerHTML = '<a id="ride-source" target="_blank" rel="noopener noreferrer">人物模型 · Abcxyz51</a> / <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>。迷你帝江號、辦公椅與跟班均為本站二創簡模；坐姿允許衣物穿模。<a href="https://sketchfab.com/3d-models/si-arknights-endfield-304e5f23db204cbd834b44138ca570d7" target="_blank" rel="noopener noreferrer">祀對手模型 · Abcxyz51</a>，同為 CC BY 4.0。';
+    this.$('#ride-card details p').innerHTML = '<a id="ride-source" target="_blank" rel="noopener noreferrer">人物模型 · Abcxyz51</a> / <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>。水墨毛筆、辦公椅與跟班均為本站二創簡模；坐姿允許衣物穿模。<a href="https://sketchfab.com/3d-models/si-arknights-endfield-304e5f23db204cbd834b44138ca570d7" target="_blank" rel="noopener noreferrer">祀對手模型 · Abcxyz51</a>，同為 CC BY 4.0。';
     this.$('[data-raft="brake"]').innerHTML = '煞車<small>甩尾／放開加速</small>';
     root.querySelector('.raft-controls').insertAdjacentHTML('beforeend', '<button id="ride-gas">息壤噴射<small id="ride-gas-count">E · 1 罐</small></button>');
     root.querySelector('.raft-controls').setAttribute('aria-label', '坐騎駕駛操作');
@@ -56,9 +56,10 @@ export class RideGame extends RaftGame {
       this.stage.lastTime = this.stage.lastSpins = this.stage.lastBumps = this.stage.seatSpin = 0;
       this.stage.shotUntil = 0;
       this.stage.resetEffects();
-      this.stage.shipSeat.rotation.y = this.stage.chairSeat.rotation.y = Math.PI;
+      this.stage.brushSeat.rotation.y = this.stage.chairSeat.rotation.y = Math.PI;
       this.$('#ride-comic').hidden = true; this.comicUntil = 0;
       this.nextQuipAt = 0; this.openingIndex = -1; this.pickupFlashUntil = 0; this.rivalTaunt = false;
+      this.rivalQuipIndex = 0;
       this.message(this.profile.start);
     }
   }
@@ -84,7 +85,7 @@ export class RideGame extends RaftGame {
     this.$('#ride-rival-option').hidden = !e.isZhuang;
     if (e.isZhuang && e.state === 'won') {
       this.$('#ride-title').textContent = e.outcome === 'rival' ? '祀先把獎品領走了？！' : e.outcome === 'late' ? '領獎處下班了。' : zhuangBeats.finish.title;
-      const ending = e.outcome === 'rival' ? '祀：謝謝管理員。莊：再跑一局。' : e.outcome === 'late' ? '龍泡泡：假沒休到，獎也沒領到。' : e.rival.enabled ? '祀：這張椅子怎麼會飛？！' : zhuangBeats.finish.line;
+      const ending = e.outcome === 'rival' ? '祀：謝謝管理員。莊：再跑一局。\n少撞牆、撿藍色＋1，回正甩尾後接 ✦。' : e.outcome === 'late' ? '龍泡泡：假沒休到，獎也沒領到。' : e.rival.enabled ? '祀：椅子贏了毛筆？！莊：獎品，我的。' : zhuangBeats.finish.line;
       this.$('#ride-result').textContent = `${e.elapsed.toFixed(1)} 秒 · 最高 ${(e.topSpeed * 3.6).toFixed(0)} km/h\n龍泡泡：地上撞 ${e.petGroundBumps} 次／天上撞 ${e.petAirBumps} 次\n${ending}\n${e.rival.enabled ? '祀 AI 對戰' : '單人故事模式'}`;
     }
     if (this.rivalLoading) { this.$('#ride-start').disabled = true; if (this.ready) this.$('#ride-start').textContent = '祀正在上車…'; }
@@ -130,7 +131,7 @@ export class RideGame extends RaftGame {
       else if (event.type === 'ink') this.message(`系統：墨印已簽收。　${p.companion}：先簽收我！！`);
       else if (event.type === 'sector') { const s = e.config.sectors[event.sector]; this.message(s.caption); this.comic(`第 ${event.sector + 1} 路段`, s.name); }
       else if (event.type === 'finish') this.message(p.finish);
-      else if (event.type === 'collision') { this.message(p.bump); this.comic(`咚！撞到${event.kind}`, this.character === 'si' ? '帝江號 → 抵牆號' : '人還在上班，椅子已離職'); }
+      else if (event.type === 'collision') { this.message(p.bump); this.comic(`咚！撞到${event.kind}`, this.character === 'si' ? '御筆飛行 → 御筆撞牆' : '人還在上班，椅子已離職'); }
     }
     if (!events.length && e.state === 'playing' && e.elapsed > (this.messageUntil || 0)) this.message(p.idle[Math.floor(e.elapsed / 5) % p.idle.length]);
     if (e.elapsed >= (this.comicUntil || 0)) this.$('#ride-comic').hidden = true;
@@ -147,7 +148,8 @@ export class RideGame extends RaftGame {
     this.root.querySelector('.raft-hud small').textContent = phase?.title || '龍泡泡兜風';
     this.$('#ride-distance').textContent = `${Math.floor(e.progress / e.config.length * 100)}%${e.prizeRemaining !== null ? ` · 領獎 ${e.prizeRemaining.toFixed(1)}s` : ''}`;
     const gap = Math.round(e.rival.progress - e.progress);
-    this.$('#ride-score').textContent = e.rival.enabled ? e.rival.finished ? '祀已衝線' : gap > 0 ? `祀領先 ${gap}m` : `領先祀 ${-gap}m` : `泡泡 ${e.petBumps} 撞`;
+    const rivalMove = e.rival.burst ? ' · 收筆！' : e.rival.cornering ? ' · 壓彎' : '';
+    this.$('#ride-score').textContent = e.rival.enabled ? e.rival.finished ? '祀已衝線' : (gap > 0 ? `祀領先 ${gap}m` : `領先祀 ${-gap}m`) + rivalMove : `泡泡 ${e.petBumps} 撞`;
     this.$('#ride-speed').textContent = `${(e.speed * 3.6).toFixed(0)} km/h`;
     this.$('#ride-drift-meter').value = e.charge;
     const locked = e.elapsed < zhuangRace.raceAt;
@@ -177,7 +179,9 @@ export class RideGame extends RaftGame {
       this.message('點右下 ⇧ 起飛，龍泡泡不負責降落！');
     } else if (!story && e.elapsed >= this.nextQuipAt && e.state === 'playing') {
       const hit = events.find(event => event.type === 'pet-hit' || event.type === 'collision');
-      if (hit) { this.message(impactLines[hit.kind] || '龍泡泡：撞的是我！！'); this.nextQuipAt = e.elapsed + 4; }
+      const rival = ['finish', 'passed', 'pass', 'near', 'burst'].map(action => events.find(event => event.type === 'rival' && event.action === action)).find(Boolean);
+      if (rival) { this.message(rivalLines[rival.action][this.rivalQuipIndex++ % 2]); this.nextQuipAt = e.elapsed + 4; }
+      else if (hit) { this.message(impactLines[hit.kind] || '龍泡泡：撞的是我！！'); this.nextQuipAt = e.elapsed + 4; }
       else if (events.some(event => event.type === 'gas')) { this.message('莊：獎品，我拿定了。'); this.nextQuipAt = e.elapsed + 4; }
     }
     if (events.some(event => event.type === 'pickup')) this.pickupFlashUntil = e.elapsed + 1.2;
@@ -204,7 +208,7 @@ export class RideGame extends RaftGame {
       const ready = await this.stage.opponent?.setEnabled(enabled);
       if (request !== this.opponentRequest || !this.active) return;
       this.engine.setOpponent(enabled && ready);
-      this.$('#ride-rival-status').textContent = ready ? '祀已就位：獎品只有一份喔。' : '';
+      this.$('#ride-rival-status').textContent = ready ? '祀已就位：這次不放水，獎品只有一份喔。' : '';
     } catch {
       if (request !== this.opponentRequest || !this.active) return;
       this.opponentEnabled = false; this.$('#ride-rival').checked = false;

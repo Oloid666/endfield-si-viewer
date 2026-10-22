@@ -5,7 +5,7 @@ import { Box3, Group, PerspectiveCamera, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RideEngine } from '../src/game/RideEngine.js';
 import { SeatedRider } from '../src/game/SeatedRider.js';
-import { rideConfig, zhuangRideConfig } from '../src/config/rideConfig.js';
+import { rideConfig, zhuangRideConfig, rivalRideConfig } from '../src/config/rideConfig.js';
 import { zhuangRace, openingDialogue, impactLines } from '../src/game/ZhuangRaceStory.js';
 import { RideStage } from '../src/game/RideStage.js';
 
@@ -245,17 +245,57 @@ test('optional Si opponent progresses independently, freezes with the race, and 
     while (e.state === 'playing' && e.elapsed < 170) {
       const before = e.rival.progress;
       e.update(1 / 120);
-      assert(e.rival.progress >= before); assert(e.rival.speed <= 42);
+      assert(e.rival.progress >= before); assert(e.rival.speed <= rivalRideConfig.maxSpeed);
       if (e.takeoffPending) { pendingAt ??= e.elapsed; if (e.elapsed - pendingAt >= delay) e.requestTakeoff(); }
       e.takeEvents();
     }
     return e;
   };
-  assert.equal(run(0).outcome, 'player'); assert.equal(run(60).outcome, 'rival'); assert.equal(run(60, false).outcome, 'late');
+  assert.equal(run(0).outcome, 'rival', 'automatic takeoff alone no longer wins'); assert.equal(run(60).outcome, 'rival'); assert.equal(run(60, false).outcome, 'late');
   const e = zhuangEngine(); e.setOpponent(true); advance(e, 15); e.pause();
   const snapshot = JSON.stringify(e); advance(e, 3); assert.equal(JSON.stringify(e), snapshot);
   e.start(); assert.equal(e.rival.progress, 0); assert(e.rival.enabled);
   e.setOpponent(false); assert(!e.rival.enabled); e.resume(); advance(e, 1); assert.equal(e.rival.progress, 0);
+});
+
+test('serious Si beats idling and careless boosts, but clean button steering, pickups and drift can win', () => {
+  const run = mode => {
+    const e = zhuangEngine(); e.setOpponent(true); let steer = 0, nextInput = 0;
+    while (e.state === 'playing' && e.elapsed < 120) {
+      if (e.takeoffPending) e.requestTakeoff();
+      if (mode !== 'idle' && e.elapsed >= zhuangRace.raceAt) e.useGas();
+      if (mode === 'skill' && e.elapsed >= nextInput) {
+        const correction = -e.offset * .17 - e.velocity * .18 + e.curvature(e.progress) * e.speed * .75;
+        steer = Math.abs(correction) > .08 ? Math.sign(correction) : 0;
+        nextInput = e.elapsed + .18; // held left/right buttons, no analogue input or frame-perfect steering
+      }
+      e.update(1 / 120, { steer }); e.takeEvents();
+    }
+    return e;
+  };
+  const idle = run('idle'), careless = run('boost'), skill = run('skill');
+  assert.equal(idle.outcome, 'rival'); assert.equal(careless.outcome, 'rival');
+  assert.equal(skill.outcome, 'player'); assert.equal(skill.bumps, 0);
+  assert(skill.pickups.size >= 4 && skill.driftCount >= 3);
+  assert(skill.prizeClock < idle.rival.finishTime - 2, 'winning has room beyond one frame');
+  assert(Math.abs(idle.rival.finishTime - careless.rival.finishTime) < 1e-8, 'AI pace is independent of player mistakes');
+});
+
+test('Si plans corners and finite bursts; passing reactions have cooldowns and freeze/reset with play', () => {
+  const e = zhuangEngine(); e.setOpponent(true); advance(e, 13.1);
+  assert(e.rival.burst > 0); assert(e.rival.bursts === 1);
+  e.takeEvents(); const r = e.rival;
+  r.progress = e.progress - 10; r.lead = 1; r.nextQuip = 0;
+  e.update(1 / 120); assert(e.takeEvents().some(event => event.action === 'passed'));
+  assert.equal(r.reaction, 'passed'); assert(r.reactionUntil > r.clock);
+  r.progress = e.progress + 10; e.update(1 / 120);
+  assert(!e.takeEvents().some(event => ['pass', 'near'].includes(event.action)), 'nearby crossings cannot spam taunts');
+  r.nextQuip = 0; r.lead = -1; e.update(1 / 120);
+  assert(e.takeEvents().some(event => event.action === 'pass'));
+  e.pause(); const snapshot = JSON.stringify(r); advance(e, 5); assert.equal(JSON.stringify(r), snapshot);
+  e.start(); assert.equal(e.rival.bursts, 0); assert.equal(e.rival.reaction, null);
+  e.rival.progress = 330; e.elapsed = e.rival.clock = 20; e.rival.nextBurst = 0;
+  e.update(1 / 120); assert(e.rival.cornering); assert.equal(e.rival.burst, 0, 'no straight-line burst before a corner');
 });
 
 test('slow-motion decision and AI simulation are consistent at 30, 60 and 120 Hz', () => {
@@ -311,6 +351,27 @@ for (const id of ['si', 'zhuang']) test(`${id} source skeleton supports a seated
     assert(wrist.y > .6 && wrist.z < -.3, `spell hand lifts above the armrest and reaches forward: ${wrist.toArray()}`);
     for (const { bone } of rig.bones) assert(bone.quaternion.toArray().every(Number.isFinite));
   }
+  rig.restore();
+  for (const { bone, p, q, s } of rig.bones) { assert(bone.position.equals(p)); assert(bone.quaternion.equals(q)); assert(bone.scale.equals(s)); }
+  model.gltf.scene.traverse(node => { node.geometry?.dispose(); for (const material of Array.isArray(node.material) ? node.material : [node.material]) material?.dispose(); });
+});
+
+test('Si side-saddle bends both legs to one side, reaches the brush and can wave without moving the pelvis', async () => {
+  const model = await sourceModel('si'), mount = new Group();
+  const rig = new SeatedRider(model, mount, 2.6, { sideSaddle: true });
+  assert(rig.attach()); rig.update(1, .2, 0);
+  const knees = ['L', 'R'].map(side => mount.worldToLocal(rig.nodes[`knee${side}`].getWorldPosition(new Vector3())));
+  assert(knees.every(knee => knee.x < -.2), `both knees sit beside shaft: ${knees.map(v => v.toArray())}`);
+  for (const side of ['L', 'R']) {
+    const knee = mount.worldToLocal(rig.nodes[`knee${side}`].getWorldPosition(new Vector3()));
+    const foot = mount.worldToLocal(rig.nodes[`foot${side}`].getWorldPosition(new Vector3()));
+    assert(foot.y < knee.y - .2);
+  }
+  for (let i = 0; i < 30; i++) rig.update(1.1 + i / 60, -.3, 0, { wave: true, lookBack: 1 });
+  const wrist = mount.worldToLocal(rig.nodes.wristR.getWorldPosition(new Vector3()));
+  assert(wrist.y > .65, `passing salute is visibly raised: ${wrist.toArray()}`);
+  assert(mount.worldToLocal(rig.nodes.pelvis.getWorldPosition(new Vector3())).length() < .04);
+  for (const { bone } of rig.bones) assert(bone.quaternion.toArray().every(Number.isFinite));
   rig.restore();
   for (const { bone, p, q, s } of rig.bones) { assert(bone.position.equals(p)); assert(bone.quaternion.equals(q)); assert(bone.scale.equals(s)); }
   model.gltf.scene.traverse(node => { node.geometry?.dispose(); for (const material of Array.isArray(node.material) ? node.material : [node.material]) material?.dispose(); });
