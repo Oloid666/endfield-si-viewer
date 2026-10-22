@@ -16,7 +16,7 @@ export class RaceDialogue {
   constructor(line){
     this.line=line;line.replaceChildren();
     this.portrait=document.createElement('span');this.portrait.className='race-portrait';this.portrait.setAttribute('role','img');
-    this.portrait.style.backgroundImage=`url("${import.meta.env.BASE_URL}images/race-portraits.png")`;
+    this.portrait.style.backgroundImage=`url("${import.meta.env.BASE_URL}images/race-portraits.webp?v=round-ink-clean-2")`;
     this.label=document.createElement('small');this.portrait.append(this.label);
     this.text=document.createElement('span');this.text.className='race-dialogue-text';line.append(this.portrait,this.text);
   }

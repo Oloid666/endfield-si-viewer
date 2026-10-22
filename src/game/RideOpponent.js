@@ -60,7 +60,7 @@ export class RideOpponent {
     const ink=this.stage.inkBody;ink.visible=true;ink.scale.setScalar(.63);
     ink.position.set(Math.max(-2,Math.min(2,-bank*9)) + Math.sin(r.clock*3)*.18,.1+Math.sin(r.clock*5)*.09,4.4);
     ink.rotation.set(0,Math.atan2(this.stage.scene.camera.position.x-this.root.position.x,this.stage.scene.camera.position.z-this.root.position.z)-this.root.rotation.y,Math.sin(r.clock*5)*.1);
-    animateCompanion(this.stage.inkProp,r.clock,{mood:r.burst?'panic':'smug',stress:r.burst ? .7 : 0});
+    animateCompanion(this.stage.inkProp,r.clock,{mood:r.burst?'panic':'smug',stress:r.burst ? .7 : 0,lookUp:.35});
     const points=this.rope.geometry.attributes.position;for(let i=0;i<9;i++){const a=i/8;points.setXYZ(i,ink.position.x*a,.65-Math.sin(a*Math.PI)*.15,2.8+(ink.position.z-2.8)*a);}points.needsUpdate=true;
     this.badge.quaternion.copy(this.stage.scene.camera.quaternion);
     this.badge.rotateY(-this.root.rotation.y);

@@ -13,6 +13,10 @@ export const encoreScripts = [
   {id:'pet-job',lines:{zhuang:'龍泡泡：下次換我坐椅子。莊：可以，記得把報告帶上。',si:'小聰明：我的職稱是什麼？祀：隨行筆記。小聰明：隨行挨撞吧！'}},
   {id:'pet-nap',lines:{zhuang:'龍泡泡：我現在可以休息了吧？莊：嗯，帶薪。龍泡泡：終於有一句人話。',si:'祀：你怎麼不說話？小聰明：墨水已用盡，請下次再試。'}},
   {id:'insurance',lines:{zhuang:'龍泡泡：保險有沒有保天上？莊：我看看條款。龍泡泡：現在才看？！',si:'小聰明：下次請畫一頂安全帽。祀：連同駕照一起畫。小聰明：駕照不能畫！'}},
+  {id:'next-time',lines:{zhuang:'莊：下次妳還帶我出來嗎？龍泡泡：帶。莊：嗯？龍泡泡：帶妳去散步，椅子沒收。',si:'祀：下次換條路。小聰明：下次換個掛後面的。祀：你還會談條件了？'}},
+  {id:'claim',lines:{zhuang:'龍泡泡：我要工傷補助。莊：妳不是說來休息？龍泡泡：妳現在倒記得很清楚！',si:'小聰明：我申請退休。祀：你才畫出來多久？小聰明：但我的工齡是按撞擊算的！'}},
+  {id:'report',lines:{zhuang:'莊：今天這件事，別跟管理員說。龍泡泡：妳領獎的時候已經全說了。莊：……只刪碰撞次數。',si:'祀：今天的事要保密。小聰明：墨印都留在護欄上了。祀：那是簽名。'}},
+  {id:'rest-again',lines:{zhuang:'龍泡泡：休息得怎麼樣？莊：精神很好。龍泡泡：我的精神已經先走了。',si:'小聰明：這趟領到多少墨水？祀：一瓶。小聰明：我一路嚇掉了三瓶！'}},
   {id:'two-pets',duel:true,lines:'小聰明：你也是來休息的？龍泡泡：她們是。我們不是。'},
   {id:'two-racers',duel:true,lines:'祀：椅子裝法術，算改裝吧？莊：毛筆裝人，也不是原廠規格。'},
   {id:'bill',duel:true,lines:'龍泡泡：維修費平分？小聰明：不，給管理員。莊：我來送。祀：我也去。'},
@@ -37,5 +41,6 @@ export class RaceEncore {
     this.recent.push(script.id);this.recent=this.recent.slice(-3);
     return text;
   }
-  restAfter(duration){this.next=this.clock+duration+5+this.random()*2;}
+  // Keep the final reply visible through a short breath, then the next argument.
+  restAfter(duration){this.next=this.clock+duration+.6+this.random()*.4;}
 }

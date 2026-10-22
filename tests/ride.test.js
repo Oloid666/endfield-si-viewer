@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Box3, Group, PerspectiveCamera, Vector3 } from 'three';
+import { Box3, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RideEngine } from '../src/game/RideEngine.js';
 import { SeatedRider } from '../src/game/SeatedRider.js';
@@ -11,10 +11,39 @@ import { RideStage } from '../src/game/RideStage.js';
 import { ZhuangIdleController } from '../src/viewer/ZhuangIdleController.js';
 import { dialogueParts } from '../src/ui/RaceDialogue.js';
 import { RaceEncore } from '../src/game/RaceEncore.js';
+import { buildCompanion, animateCompanion } from '../src/game/RideProps.js';
 
 const advance = (e, seconds, input = {}, fps = 60) => {
   for (let i = 0; i < seconds * fps; i++) e.update(1 / fps, input);
 };
+
+test('ink face belongs to the round lit head, stress moves the spirit together and resources are released',()=>{
+  const previous=globalThis.document;
+  const context=new Proxy({},{get:()=>()=>{}});
+  globalThis.document={createElement:()=>({width:512,height:512,getContext:()=>context})};
+  const resources=new Set(),owner={own(r){resources.add(r);return r;},material(color,extra={}){return this.own(new MeshStandardMaterial({color,...extra}));},mesh(g,m,parent,p=[0,0,0],s=[1,1,1]){const mesh=new Mesh(g,m);mesh.position.fromArray(p);mesh.scale.fromArray(s);parent.add(mesh);return mesh;}};
+  try{
+    const prop=buildCompanion(owner,'ink');assert.equal(prop.face.geometry.type,'SphereGeometry');assert(prop.face.material.isMeshStandardMaterial);
+    let vertices=0;prop.root.traverse(n=>{if(!n.isMesh)return;assert(n.material.isMeshStandardMaterial);const p=n.geometry.attributes.position;vertices+=p.count;assert([...p.array].every(Number.isFinite));});assert(vertices<10000);
+    const facePosition=prop.face.position.clone(),faceRotation=prop.face.quaternion.clone();animateCompanion(prop,.4,{mood:'panic',stress:1});
+    assert(prop.face.position.equals(facePosition));assert(prop.face.quaternion.equals(faceRotation),'face cannot flap like a separate card');
+    assert(prop.motion.rotation.x!==0);assert.equal(prop.face.material.map,prop.maps[prop.moods.indexOf('panic')]);
+    let disposed=0;for(const r of resources)r.addEventListener('dispose',()=>disposed++);for(const r of resources)r.dispose();assert.equal(disposed,resources.size);
+  }finally{globalThis.document=previous;}
+});
+
+test('encore keeps arguing for three minutes with short breaths, correct cast and unchanged results',()=>{
+  const e=new RideEngine();e.setCharacter('zhuang');e.state='won';e.outcome='player';
+  const before=JSON.stringify(e),encore=new RaceEncore(()=>.3);encore.start();let count=0,lastEnd=0;
+  for(let frame=0;frame<180*60;frame++){
+    const text=encore.update(1/60,e,'zhuang');if(!text)continue;
+    if(count)assert(encore.clock-lastEnd<=1.03,'no long silent gaps');
+    assert(!/祀：|小聰明：/.test(text),'absent racers stay absent');
+    const duration=3.3+(dialogueParts(text,'zhuang').length-1)*2.6;
+    lastEnd=encore.clock+duration;encore.restAfter(duration);count++;
+  }
+  assert(count>=18);assert.equal(JSON.stringify(e),before);encore.reset();assert.equal(encore.update(1,e,'zhuang'),null);
+});
 
 test('encore uses present cast and race performance, avoids recent repeats and leaves results frozen',()=>{
   const e=new RideEngine();e.setCharacter('si');e.state='won';e.bumps=5;e.petBumps=1;
@@ -26,7 +55,7 @@ test('encore uses present cast and race performance, avoids recent repeats and l
     encore.next=encore.clock;const text=encore.update(.1,e,'si');
     assert(!/莊：|龍泡泡：/.test(text),'solo never invents absent actors');
     assert(!history.slice(-3).includes(encore.current.id));history.push(encore.current.id);
-    encore.restAfter(6);assert(encore.next>=encore.clock+11);
+    encore.restAfter(6);assert(encore.next>=encore.clock+6.6&&encore.next<=encore.clock+7);
   }
   assert.equal(JSON.stringify(e),snapshot);
   encore.reset();assert.equal(encore.update(1,e,'si'),null);
