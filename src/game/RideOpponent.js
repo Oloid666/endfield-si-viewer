@@ -8,12 +8,12 @@ export class RideOpponent {
   constructor(stage) {
     this.stage = stage;
     this.models = new ModelManager(new Group(), stage.models.config);
-    this.root = new Group(); this.root.scale.setScalar(.85); stage.root.add(this.root); this.root.visible = false;
+    this.root = new Group(); this.root.scale.setScalar(.9); stage.root.add(this.root); this.root.visible = false;
     this.request = 0; this.ready = this.loading = false;
-    const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 48;
-    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#23372dcf'; ctx.fillRect(0, 0, 128, 48);
-    ctx.fillStyle = '#e5eac6'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('祀 AI', 64, 34);
-    this.badge = stage.mesh(stage.own(new PlaneGeometry(1.3, .49)), stage.own(new MeshBasicMaterial({ map: stage.own(new CanvasTexture(canvas)), transparent: true, depthWrite: false })), this.root, [0, 4.3, 0]);
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 48;
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#23372dcf'; ctx.fillRect(0, 0, 256, 48);
+    ctx.fillStyle = '#e5eac6'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('祀 · 御筆飛行', 128, 34);
+    this.badge = stage.mesh(stage.own(new PlaneGeometry(2.4, .45)), stage.own(new MeshBasicMaterial({ map: stage.own(new CanvasTexture(canvas)), transparent: true, depthWrite: false })), this.root, [0, 3.8, 0]);
   }
 
   async setEnabled(enabled) {
@@ -27,10 +27,10 @@ export class RideOpponent {
       const asset = typeof __MODEL_ASSETS__ !== 'undefined' ? __MODEL_ASSETS__['models/si.glb'] : null;
       const model = await this.models.load(`${base}models/si.glb`, undefined, { characterId: 'si', asset });
       if (!model || request !== this.request) return false;
-      this.rig = new SeatedRider(model, this.stage.shipMount, 2.6);
+      this.rig = new SeatedRider(model, this.stage.brushMount, 2.6, { sideSaddle: true });
       if (!this.rig.attach()) throw new Error('祀的坐姿尚未準備好，請關閉對手後先玩。');
-      this.root.add(this.stage.ship); this.stage.shipSeat.rotation.y = 0;
-      this.stage.ship.visible = true; this.ready = true;
+      this.root.add(this.stage.brush); this.stage.brushSeat.rotation.y = 0;
+      this.stage.brush.visible = true; this.ready = true;
       return true;
     } catch (error) {
       if (request !== this.request) return false;
@@ -43,21 +43,23 @@ export class RideOpponent {
     if (!this.ready || !r.enabled) { this.root.visible = false; return; }
     this.root.visible = Math.abs(r.progress - engine.progress) < 95;
     if (!this.root.visible) return;
-    this.stage.ship.visible = true; this.stage.shipSeat.rotation.y = 0;
+    this.stage.brush.visible = true; this.stage.brushSeat.rotation.y = 0;
     const center = this.stage.center;
     this.root.position.set(center(r.progress) + r.offset, .95 + Math.sin(r.clock * 3) * .08, -r.progress);
     const slope = center(r.progress + .5) - center(r.progress - .5);
-    this.root.rotation.set(-.05, -Math.atan(slope), Math.sin(r.clock * 2) * .05);
-    this.rig.update(r.clock, Math.sin(r.clock) * .15, 0);
+    const bank = r.cornering ? Math.sign(engine.curvature(r.progress)) * -.18 : Math.sin(r.clock * 2) * .035;
+    this.root.rotation.set(r.burst ? -.13 : -.03, -Math.atan(slope), bank);
+    const reacting = r.clock < r.reactionUntil;
+    this.rig.update(r.clock, bank, 0, { wave: reacting && r.reaction !== 'passed', lookBack: reacting ? 1 : 0 });
     this.badge.quaternion.copy(this.stage.scene.camera.quaternion);
     this.badge.rotateY(-this.root.rotation.y);
-    this.stage.flames.forEach(flame => { flame.scale.y = .9 + Math.sin(r.clock * 20) * .15; });
+    this.stage.flames.forEach((flame, i) => { flame.scale.y = (r.burst ? 3 : .65) + Math.sin(r.clock * 20 + i) * .2; flame.position.x = (i - 1.5) * .14 + Math.sin(r.clock * 8 + i) * .07; });
   }
 
   clear() {
     this.rig?.restore(); this.rig = null;
     this.models.current?.group.removeFromParent(); this.models.dispose();
-    this.stage.raft.add(this.stage.ship); this.stage.ship.visible = false;
+    this.stage.raft.add(this.stage.brush); this.stage.brush.visible = false;
     this.root.visible = this.ready = this.loading = false;
   }
   dispose() { ++this.request; this.clear(); this.root.removeFromParent(); }

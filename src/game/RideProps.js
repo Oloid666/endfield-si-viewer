@@ -105,47 +105,30 @@ export function buildCompanion(owner, kind) {
   return { root, arms, tail, face, maps };
 }
 
-export function buildMiniDijiang(owner) {
-  const root = new Group(), fixed = new Group(), seat = new Group(), mount = new Group(); root.add(fixed, seat); seat.add(mount); seat.position.set(0, 1.14, -.3);
-  const box = owner.own(new BoxGeometry(1, 1, 1)), sphere = owner.own(new SphereGeometry(1, 14, 10));
-  const beam = owner.material(0x344448, { metalness: .55, roughness: .52 });
-  const shell = owner.material(0xd3d8d0, { metalness: .25, roughness: .6 });
-  const dark = owner.material(0x1d2a2d), warning = owner.material(0xd9aa55);
-  const glow = owner.material(0xe6c87c, { emissive: 0xc69c35, emissiveIntensity: .8 });
-  const thrust = owner.material(0xc7e5cd, { emissive: 0x7ed0b3, emissiveIntensity: 1 });
-  const ring = owner.own(new TorusGeometry(1.02, .055, 5, 24));
-  for (const z of [-1.65, 1.65]) {
-    owner.mesh(ring, beam, fixed, [0, .57, z]);
-    for (const side of [-1, 1]) {
-      owner.mesh(box, shell, fixed, [side * .96, .57, z], [.38, .6, .72]);
-      owner.mesh(box, dark, fixed, [side * 1.16, .64, z], [.025, .16, .47]);
-    }
-  }
-  owner.mesh(box, beam, fixed, [0, .52, 0], [.4, .4, 5.9]);
-  owner.mesh(box, shell, fixed, [0, .62, -2.25], [.8, .62, 1.4]);
-  owner.mesh(box, dark, fixed, [0, .98, -2.35], [.56, .16, .64]);
-  owner.mesh(sphere, glow, fixed, [0, .6, .8], [.43, .43, .43]);
-  owner.mesh(box, shell, fixed, [0, .75, -.2], [1.4, .22, 1.3]);
-  const flames = [];
-  for (const side of [-1, 1]) {
-    for (const y of [.1, 1.04]) owner.mesh(box, beam, fixed, [side * .78, y, 0], [.07, .07, 4.8]);
-    for (const z of [-.9, .9]) {
-      owner.mesh(box, shell, fixed, [side * 1.28, .55, z], [.62, .66, 1.1]);
-      owner.mesh(box, warning, fixed, [side * 1.28, .9, z], [.5, .035, .18]);
-    }
-    const diagonal = owner.mesh(box, beam, fixed, [side * .78, .57, 0], [.055, 1.15, 2.8]); diagonal.rotation.x = side * .32;
-    const antenna = owner.mesh(box, beam, fixed, [side * .55, .68, -3.05], [.035, .035, .9]); antenna.rotation.y = side * .18;
-    const nozzle = owner.mesh(owner.own(new CylinderGeometry(.22, .28, .55, 10)), dark, fixed, [side * .82, .3, 2.48]); nozzle.rotation.x = Math.PI / 2;
-    const flame = owner.mesh(owner.own(new ConeGeometry(.22, 1.2, 8)), thrust, root, [side * .82, .3, 3.05]); flame.rotation.x = Math.PI / 2; flames.push(flame);
-    owner.mesh(box, dark, seat, [side * .47, .24, 0], [.11, .1, .8]);
-  }
-  owner.mesh(box, dark, seat, [0, -.06, 0], [.84, .13, .7]);
-  owner.mesh(box, dark, seat, [0, .3, .35], [.84, .72, .12]);
-  const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 64;
-  const c = canvas.getContext('2d'); c.fillStyle = '#d3d8d0'; c.fillRect(0, 0, 256, 64); c.fillStyle = '#27383b'; c.font = 'bold 28px sans-serif'; c.fillText('O.M.V. DIJIANG', 10, 40);
-  const labelMap = owner.own(new CanvasTexture(canvas)); labelMap.colorSpace = SRGBColorSpace;
-  const label = owner.own(new MeshBasicMaterial({ map: labelMap }));
-  owner.mesh(owner.own(new PlaneGeometry(1.2, .3)), label, fixed, [0, .6, 2.76]);
+// Bamboo shaft, ivory ferrule, tapered ink-loaded bristles. The silhouette is
+// readable from the chase camera; fixed pieces are merged by material.
+export function buildFlyingBrush(owner) {
+  const root = new Group(), fixed = new Group(), seat = new Group(), mount = new Group();
+  root.name = 'flying-ink-brush'; root.add(fixed, seat); seat.add(mount); seat.position.set(0, .94, .35);
+  const bamboo = owner.material(0x8f673d, { roughness: .65 });
+  const dark = owner.material(0x161e21), ivory = owner.material(0xe2dfc6);
+  const gold = owner.material(0xc5a460, { metalness: .25, roughness: .55 });
+  const jade = owner.material(0x9cc7b0, { emissive: 0x31574c, emissiveIntensity: .35 });
+  const shaft = owner.mesh(owner.own(new CylinderGeometry(.18, .24, 4.5, 12)), bamboo, fixed, [0, .65, .6]); shaft.rotation.x = Math.PI / 2;
+  const collar = owner.mesh(owner.own(new CylinderGeometry(.29, .24, .62, 12)), ivory, fixed, [0, .65, -1.75]); collar.rotation.x = Math.PI / 2;
+  const bristles = owner.mesh(owner.own(new ConeGeometry(.3, 1.6, 14)), dark, fixed, [0, .65, -2.85]); bristles.rotation.x = -Math.PI / 2;
+  const ring = owner.own(new TorusGeometry(.245, .035, 5, 12));
+  for (const z of [-1.39, -.8, .9, 2.72]) owner.mesh(ring, gold, fixed, [0, .65, z]);
+  const grain = owner.own(new BoxGeometry(.018, .018, 3.8));
+  for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; owner.mesh(grain, dark, fixed, [Math.sin(a) * .19, .65 + Math.cos(a) * .19, .65]); }
+  const ribbon = owner.mesh(owner.own(new BoxGeometry(.065, .035, 1.2)), jade, fixed, [.25, .64, 3.15]); ribbon.rotation.y = -.3;
+  owner.mesh(owner.own(new SphereGeometry(.11, 8, 6)), gold, fixed, [0, .65, 2.98]);
   batch(owner, fixed);
+  // Four small repeatable ink strokes; no particles allocated while racing.
+  const flames = [], stroke = owner.own(new ConeGeometry(.12, 1.4, 5));
+  for (let i = 0; i < 4; i++) {
+    const ink = owner.mesh(stroke, i % 2 ? jade : dark, root, [(i - 1.5) * .14, .6 + i % 2 * .13, 3.5 + i * .22]);
+    ink.rotation.x = Math.PI / 2; flames.push(ink);
+  }
   return { root, seat, mount, flames };
 }

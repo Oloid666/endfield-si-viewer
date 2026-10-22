@@ -5,8 +5,10 @@ import { seatedRigNodes } from '../config/rideConfig.js';
 // Two explicit profiles for the supplied models. Runtime offsets only; clothing
 // clipping is accepted for this prototype and the source skeleton is untouched.
 export class SeatedRider {
-  constructor(model, mount, height) {
+  constructor(model, mount, height, { sideSaddle = false } = {}) {
     this.model = model; this.mount = mount; this.height = height;
+    this.sideSaddle = sideSaddle;
+    this.wave = this.lookBack = this.lastPoseTime = 0;
     const profile = seatedRigNodes[model.characterId];
     this.nodes = {};
     model.gltf.scene.traverse(node => {
@@ -28,7 +30,7 @@ export class SeatedRider {
     if (idle.supported) { idle.update(3, new Vector3()); idle.transition = null; idle.applyBody(null, 0); idle.setBlink(0); }
     this.bones = Object.values(this.nodes).map(bone => ({ bone, p: bone.position.clone(), q: bone.quaternion.clone(), s: bone.scale.clone() }));
     this.mount.add(group);
-    group.position.set(0, 0, 0); group.rotation.set(0, Math.PI, 0);
+    group.position.set(0, 0, 0); group.rotation.set(0, Math.PI + (this.sideSaddle ? Math.PI / 2 : 0), 0);
     group.scale.setScalar(this.height / idle.height); group.updateWorldMatrix(true, true);
     this.solvers = {};
     for (const side of ['L', 'R']) this.solvers[side] = new LimbSolver(this.nodes[`arm${side}`], this.nodes[`elbow${side}`], this.nodes[`wrist${side}`]);
@@ -53,18 +55,25 @@ export class SeatedRider {
 
   update(time, lean, hit, pose = null) {
     if (!this.bones) return;
+    const follow = 1 - Math.exp(-Math.max(0, Math.min(.12, time - this.lastPoseTime)) * 9);
+    this.lastPoseTime = time;
+    this.wave += ((pose?.wave ? 1 : 0) - this.wave) * follow;
+    this.lookBack += ((pose?.lookBack || 0) - this.lookBack) * follow;
     for (const { bone, p, q, s } of this.bones) { bone.position.copy(p); bone.quaternion.copy(q); bone.scale.copy(s); }
     this.model.group.updateWorldMatrix(true, true);
     this.rotate('spine', [0, 0, 1], -lean * .18);
-    if (pose) this.rotate('spine', [1, 0, 0], -.18 * pose.determined);
-    this.rotate('head', [0, 1, 0], -.3 + Math.sin(time * .8) * .12);
+    if (this.sideSaddle) this.rotate('spine', [0, 1, 0], -.9);
+    if (pose?.determined) this.rotate('spine', [1, 0, 0], -.18 * pose.determined);
+    this.rotate('head', [0, 1, 0], (this.sideSaddle ? -.35 + this.lookBack * .65 : -.3) + Math.sin(time * .8) * .12);
     this.rotate('head', [0, 0, 1], lean * .12 + hit * .18);
     for (const [index, side] of ['L', 'R'].entries()) {
       this.rotate(`thigh${side}`, [1, 0, 0], -1.45 + Math.sin(time * 5 + index) * .035);
       this.rotate(`knee${side}`, [1, 0, 0], 1.45);
-      // Hands reach toward the armrest / ship grips; elbows point outwards.
+      // Hands reach toward the armrest / brush; elbows point outwards.
       const sign = index ? -1 : 1;
-      this.target.set(sign * .35, pose?.magic && side === 'R' ? .95 : .3, pose?.magic && side === 'R' ? -.85 : -.57); this.mount.localToWorld(this.target);
+      if (this.sideSaddle) this.target.set(sign * .25, .15 + (side === 'R' ? this.wave * (.75 + Math.sin(time * 14) * .08) : 0), -.25 - (side === 'R' ? this.wave * .15 : 0));
+      else this.target.set(sign * .35, pose?.magic && side === 'R' ? .95 : .3, pose?.magic && side === 'R' ? -.85 : -.57);
+      this.mount.localToWorld(this.target);
       this.pole.set(sign * 1.1, .1, -.1); this.mount.localToWorld(this.pole);
       this.solvers[side].solve(this.target, this.pole);
     }
