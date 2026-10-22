@@ -66,11 +66,12 @@ export const zhuangRideConfig = {
   jumps: [{ s:1775, gapStart:1800, gapEnd:1825, width:7, landingWidth:4.5, minSpeed:30, seconds:1.7, height:3.4 }],
 };
 
-// A repeatable opponent pace: no rubber-banding or position-based speed bonus.
+// Two bounded pace profiles, selected once per race; no rubber-banding.
 export const rivalRideConfig = {
   introSpeed: 15, cruiseSpeed: 48, maxSpeed: 58, acceleration: 2.2,
   cornerLoss: .2, burstSpeed: 10, burstSeconds: 2, burstCooldown: 6,
   straightCurvature: .0025, lane: 2.5, passMargin: 5, quipCooldown: 8, windupSeconds:.75,
+  paceSwing:.025, burstCooldownSwing:.5,
 };
 
 export const rideProfiles = {

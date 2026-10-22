@@ -31,10 +31,13 @@ function paintFace(owner, kind, mood) {
   if (kind === 'ink') {
     c.fillStyle = '#e6e4ce';
     c.beginPath(); c.moveTo(12, 8); c.lineTo(244, 8); c.lineTo(230, 231); c.lineTo(210, 243); c.lineTo(181, 238); c.lineTo(143, 250); c.lineTo(109, 243); c.lineTo(70, 248); c.lineTo(27, 233); c.closePath(); c.fill();
-    c.strokeStyle = '#547e3b'; c.lineWidth = 13;
+    // Faint paper fibres, rather than the old green ruled-paper stripes.
+    c.strokeStyle = '#a6a58b'; c.lineWidth = 1; c.globalAlpha = .16;
+    for (let i = 0; i < 30; i++) { const x=18+(i*47)%219,y=15+(i*31)%215;c.beginPath();c.moveTo(x,y);c.lineTo(x+3,y+9);c.stroke(); }
+    c.globalAlpha=1;c.strokeStyle = '#547e3b'; c.lineWidth = 13;
     for (const side of [-1, 1]) {
       c.save(); c.translate(128 + side * 61, 108); c.rotate(side * (angry ? .28 : -.18));
-      c.beginPath(); c.moveTo(-27, -29); c.quadraticCurveTo(0, -14, 27, -31); c.stroke();
+      c.fillStyle='#527a38';c.beginPath();c.moveTo(-31,-35);c.quadraticCurveTo(-2,-15,31,-37);c.quadraticCurveTo(16,-10,-13,-18);c.closePath();c.fill();
       c.lineWidth = panic ? 9 : 12; c.beginPath();
       if (dead) { c.moveTo(-17,-4); c.lineTo(17,24); c.moveTo(17,-4); c.lineTo(-17,24); }
       else if(blink) { c.moveTo(-22,12); c.lineTo(22,12); }
@@ -43,9 +46,7 @@ function paintFace(owner, kind, mood) {
       else { c.moveTo(-25, 9); c.quadraticCurveTo(0, 30, 25, 7); }
       c.stroke(); c.restore();
     }
-    c.lineWidth = 10; c.beginPath(); c.moveTo(101, 188); c.quadraticCurveTo(126, panic ? 146 : smug ? 222 : angry ? 170 : 208, 155, 185); c.stroke();
-    c.globalAlpha = .25; c.lineWidth = 2;
-    for (let i = 0; i < 11; i++) { c.beginPath(); c.moveTo(25 + i * 20, 17); c.lineTo(20 + i * 20, 225); c.stroke(); }
+    c.lineWidth = 10; c.beginPath(); c.moveTo(105, 188); c.quadraticCurveTo(126, panic ? 146 : smug ? 212 : angry ? 170 : 186, 150, 180); c.stroke();
   } else {
     const gradient = c.createLinearGradient(0, 70, 0, 213); gradient.addColorStop(0, '#38a58e'); gradient.addColorStop(.55, '#9fc774'); gradient.addColorStop(1, '#eddb73');
     for (const side of [-1, 1]) {
@@ -81,13 +82,22 @@ export function buildCompanion(owner, kind) {
   const green = owner.material(0x84bba6), red = owner.material(0xba5043);
   const arms = [], ink = kind === 'ink';
   if (ink) {
-    owner.mesh(sphere, black, fixed, [0, .47, -.08], [.43, .43, .37]);
-    owner.mesh(sphere, black, fixed, [0, 1.13, -.03], [.76, .68, .62]);
-    // Rounded ink silhouette around a raised, thick paper face, not a hanging strip.
-    facePanel(owner,owner.material(0xdbd9be,{side:DoubleSide}),fixed,1.14,1.13,[0,.98,.61]);
+    // Official Si story, 3:05: a continuous hood/robe, round crown, narrow
+    // recessed paper mask and wide sleeves. Not a ball wearing a square card.
+    const robe=owner.own(new LatheGeometry([
+      new Vector2(0,.08),new Vector2(.30,.08),new Vector2(.44,.32),
+      new Vector2(.51,.76),new Vector2(.57,1.15),new Vector2(.66,1.49),
+      new Vector2(.60,1.76),new Vector2(.40,1.98),new Vector2(0,2.08),
+    ],20));
+    owner.mesh(robe,black,fixed,[0,0,-.06],[1,1,.87]);
+    facePanel(owner,owner.material(0xdad8bd,{side:DoubleSide}),fixed,.84,1.03,[0,1.01,.48]);
+    // Heavy hood lip overlaps the paper's upper edge and curves around its sides.
+    owner.mesh(sphere,black,fixed,[0,1.65,.015],[.66,.42,.57]);
     for (const side of [-1, 1]) {
-      arms.push(owner.mesh(sphere, black, root, [side * .69, .75, .13], [.29, .17, .19]));
-      const foot = owner.mesh(cone, black, fixed, [side * .28, .12, .23], [.19, .32, .27]); foot.rotation.z = side * -.25;
+      const sleeve=new Group();root.add(sleeve);sleeve.position.set(side*.45,.91,-.015);arms.push(sleeve);
+      const cloth=owner.mesh(sphere,black,sleeve,[side*.18,-.25,.02],[.24,.48,.25]);cloth.rotation.z=side*-.55;
+      for(let i=0;i<3;i++)owner.mesh(sphere,black,sleeve,[side*(.35+i*.06),-.53+i*.045,.08+i*.08],[.12,.10,.075]);
+      const foot=owner.mesh(sphere,black,fixed,[side*.27,.10,.16],[.22,.15,.31]);foot.rotation.y=side*-.25;
     }
   } else {
     owner.mesh(sphere, white, fixed, [0, .94, 0], [.9, .9, .79]);
@@ -107,7 +117,7 @@ export function buildCompanion(owner, kind) {
   const moods = ['calm','panic','smug','angry','dead','blink'];
   const maps = moods.map(mood => paintFace(owner, kind, mood));
   const material = owner.own(new MeshBasicMaterial({ map: maps[0], transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }));
-  const face = facePanel(owner, material, root, ink ? 1.13 : 1.5, ink ? 1.12 : 1.03, ink ? [0, .98, .635] : [0, .96, .8]);
+  const face = facePanel(owner, material, root, ink ? .82 : 1.5, ink ? 1.01 : 1.03, ink ? [0, 1.01, .501] : [0, .96, .8]);
   const tail = new Group();root.add(tail);tail.position.set(0,.38,-.55);
   owner.mesh(cone, ink ? black : green, tail, [0,0,0], [ink ? .27 : .18, ink ? 1 : .6, .23]).rotation.x=-1.1;
   if(ink)for(let i=0;i<3;i++)owner.mesh(sphere,black,tail,[Math.sin(i*3)*.09,-i*.09,-.22-i*.23],[.2-i*.045,.16-i*.035,.24-i*.04]);

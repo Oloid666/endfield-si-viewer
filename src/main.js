@@ -320,7 +320,7 @@ try {
   escapeGame=new EscapeGame(document.querySelector('#escape-root'),new EscapeStage(scene,camera,models,escapeLevels[0]),{exit:()=>selectZone('hub')});
   raft=new RaftGame(document.querySelector('#raft-root'),new RaftStage(scene,camera,models),{exit:()=>selectZone('hub')});
   ride=new RideGame(document.querySelector('#ride-root'),new RideStage(scene,camera,models),{exit:()=>selectZone('hub'),character:key=>{ride.character=key;selectZone('ride');}});
-  for(const button of document.querySelectorAll('#game-hub [data-open]'))button.addEventListener('click',()=>selectZone(button.dataset.open));
+  for(const button of document.querySelectorAll('#game-hub [data-open]'))button.addEventListener('click',()=>{if(button.dataset.rider)ride.character=button.dataset.rider;selectZone(button.dataset.open);});
   for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.addEventListener('click',()=>selectZone(button.dataset.zone));
   zoneHashListener=()=>{const next=location.hash.slice(1);if(next!==zone&&['si','zhuang','hub','game','climb','escape','raft','ride'].includes(next))selectZone(next);};
   window.addEventListener('hashchange',zoneHashListener);

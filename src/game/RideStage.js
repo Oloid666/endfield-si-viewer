@@ -260,6 +260,10 @@ export class RideStage extends RaftStage {
   }
 
   resetEffects() {
+    this.encoreReady=false;
+    if(this.rope)this.rope.visible=true;
+    if(this.opponent?.rope)this.opponent.rope.visible=true;
+    if(this.opponent?.badge)this.opponent.badge.visible=true;
     this.petSpin = this.lastFXPetBumps = 0; this.signHitAt = [];
     this.puffIndex = this.trackIndex = this.emitClock = this.trackClock = this.lastFXBumps = 0;
     for (const item of [...this.puffs, ...this.starParticles, ...this.trackParticles]) item.life = 0;
@@ -373,7 +377,8 @@ export class RideStage extends RaftStage {
     const spin = Math.sin(time * 12) * engine.hit * (si ? .4 : .25);
     const takeover = si ? 0 : takeoverBlend(engine.elapsed);
     seat.rotation.y += (Math.PI * (1 - takeover) + spin - seat.rotation.y) * (1 - Math.exp(-dt * 4));
-    this.rider.update(time, engine.heading, engine.hit, si ? {jump:engine.jumpHeight()}: { determined: takeover, magic: engine.gasTime > 0 || engine.flying, story:engine.storyPhase, jump:engine.jumpHeight(),grudge:engine.petGrudge });
+    const flair=engine.prizeClock<engine.flairUntil;
+    this.rider.update(time, engine.heading, engine.hit, si ? {jump:engine.jumpHeight(),lookBack:flair&&engine.flair===1?.6:0,wave:flair&&engine.flair===2}: { determined: takeover, magic: engine.gasTime > 0 || engine.flying, story:engine.storyPhase, jump:engine.jumpHeight(),grudge:engine.petGrudge });
     this.brushCharge.visible=si&&engine.gasTime>0;
     this.renderSpeed = engine.speed; this.jetting = engine.boost > 0 || engine.gasTime > 0 || engine.flying;
     for (const flame of this.flames) flame.scale.y = (engine.state === 'playing' ? .9 + Math.sin(time * 34) * .16 + (engine.gasTime ? 3 : engine.boost ? 1.8 : 0) : .4);
@@ -382,7 +387,7 @@ export class RideStage extends RaftStage {
     this.warning.rotation.z = Math.sin(time * 16) * engine.hit * .5;
     this.pickupMeshes.forEach((mesh, i) => { mesh.visible = !engine.pickups.has(i); mesh.position.y = 1.1 + (this.config.pickups[i].s >= zhuangRace.flightAt && !si ? zhuangRace.flightHeight : 0) + Math.sin(time * 3 + i) * .14; mesh.rotation.y = si ? time * 1.5 : 0; if (mesh.userData.cube) mesh.userData.cube.rotation.y = time * 1.5; if (mesh.userData.label) mesh.userData.label.quaternion.copy(this.scene.camera.quaternion); });
     const prop = si ? this.inkProp : this.dragonProp;
-    animateCompanion(prop,time,{mood:engine.petMood,wave:!si&&engine.takeoffPending?1:0,stress:engine.pet.hit+ (engine.gasTime>0 ? .5 : 0),blink:Math.max(0,1-Math.abs(time%5-.15)/.1)});
+    animateCompanion(prop,time,{mood:engine.petMood,wave:(!si&&engine.takeoffPending)||flair&&engine.flair===2?1:0,stress:engine.pet.hit+ (engine.gasTime>0 ? .5 : 0),blink:Math.max(0,1-Math.abs(time%(flair?2.3:5)-.15)/.1)});
     if(!si&&engine.takeoffPending)prop.root.rotation.y=Math.sin(time*18)*.25;
     this.petBody.scale.set(.85 + engine.hit * .2, .85 - engine.hit * .25, .85 + engine.hit * .2);
   }
@@ -416,8 +421,49 @@ export class RideStage extends RaftStage {
     this.opponent?.update(engine);
   }
 
+  updateEncore(engine,delta,{speaker,mood='calm',gesture=0,talking=false}={}){
+    if(!this.active)return;
+    this.time+=Math.max(0,Math.min(delta,.12));
+    const t=this.time,duel=engine.rival.enabled&&this.opponent?.ready;
+    if(!this.encoreReady){
+      this.encoreReady=true;this.jetting=false;this.spell.visible=false;this.brushCharge.visible=false;
+      for(const mesh of [this.smoke,this.stars,this.tracks,this.rush])mesh.visible=false;
+      this.rope.visible=false;this.opponent?.rope&&(this.opponent.rope.visible=false);
+      this.camera.transition=null;
+    }
+    const x=this.center(engine.config.length),z=-engine.config.length;
+    this.raft.position.set(x-(duel?1.7:0),this.profile.hover+Math.sin(t*1.7)*.025,z);
+    this.raft.rotation.set(0,Math.PI,Math.sin(t*1.3)*.012);
+    const seat=this.character==='si'?this.brushSeat:this.chairSeat;seat.rotation.y=0;
+    const ownTalking=talking&&speaker===this.character;
+    this.rider.update(t,0,0,{encore:true,talking:ownTalking,gesture,story:'drag',wave:ownTalking&&gesture===1});
+    const hiding=gesture===1&&!talking,exhausted=gesture===0&&engine.petBumps>=4;
+    this.pet.position.set(x+(hiding?-(duel?1.7:0)+.75:duel?-.45:1.6),.15+Math.abs(Math.sin(t*2))*.08,z+(hiding?-.4:1.2));
+    this.pet.rotation.set(0,0,0);this.petBody.rotation.set(exhausted?-.25:0,0,exhausted?-.65:Math.sin(t*1.9)*.035);this.petBody.scale.setScalar(.85);
+    const petId=this.character==='si'?'ink':'dragon',petTalking=talking&&speaker===petId;
+    animateCompanion(this.character==='si'?this.inkProp:this.dragonProp,t,{mood:petTalking?mood:exhausted?'dead':'calm',wave:petTalking?1:0,stress:petTalking&&mood==='panic'?.5:0,blink:Math.max(0,1-Math.abs(t%4.7-.12)/.1)});
+    if(duel){
+      const o=this.opponent;o.root.visible=true;o.root.position.set(x+1.25,.95+Math.sin(t*1.7+2)*.04,z-.7);o.root.rotation.set(0,0,0);
+      o.badge.visible=false;this.brushSeat.rotation.y=0;
+      o.rig.update(t,0,0,{encore:true,talking:talking&&speaker==='si',gesture,wave:talking&&speaker==='si'&&gesture===1,lookBack:.4});
+      this.inkBody.position.set(-.15,-.75,2.5);this.inkBody.rotation.set(0,0,Math.sin(t*2)*.06);this.inkBody.scale.setScalar(.75);
+      animateCompanion(this.inkProp,t,{mood:talking&&speaker==='ink'?mood:'calm',wave:talking&&speaker==='ink'?1:0,blink:Math.max(0,1-Math.abs(t%4.3-.1)/.1)});
+    }
+    this.frameEncoreCamera(engine);
+  }
+
+  frameEncoreCamera(engine){
+    const camera=this.scene.camera,rect=this.scene.renderer.domElement.getBoundingClientRect(),landscape=rect.width>rect.height;
+    const x=this.center(engine.config.length),z=-engine.config.length;
+    camera.fov=landscape?43:46;
+    camera.position.set(x+(landscape?4.2:.4),landscape?4.2:4.8,z+(landscape?10.5:15.5));
+    // Leave the top for the compact score card and the lower left for portraits.
+    camera.lookAt(x+(landscape?4:0),landscape?2.2:3.4,z);camera.updateProjectionMatrix();
+  }
+
   frameCamera(engine, delta = 0) {
     if (!this.active) return;
+    if(engine.state==='won'){this.frameEncoreCamera(engine);return;}
     if (engine.isZhuang) { this.frameDrivingCamera(engine, delta); return; }
     const camera = this.scene.camera, rect = this.scene.renderer.domElement.getBoundingClientRect();
     camera.fov = (this.saved.fov || 40) + Math.max(0, Math.min(1, (this.renderSpeed - this.config.speed) / 15)) * 8;

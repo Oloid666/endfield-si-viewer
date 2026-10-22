@@ -10,10 +10,50 @@ import { zhuangRace, openingDialogue, impactLines } from '../src/game/ZhuangRace
 import { RideStage } from '../src/game/RideStage.js';
 import { ZhuangIdleController } from '../src/viewer/ZhuangIdleController.js';
 import { dialogueParts } from '../src/ui/RaceDialogue.js';
+import { RaceEncore } from '../src/game/RaceEncore.js';
 
 const advance = (e, seconds, input = {}, fps = 60) => {
   for (let i = 0; i < seconds * fps; i++) e.update(1 / fps, input);
 };
+
+test('encore uses present cast and race performance, avoids recent repeats and leaves results frozen',()=>{
+  const e=new RideEngine();e.setCharacter('si');e.state='won';e.bumps=5;e.petBumps=1;
+  const snapshot=JSON.stringify(e),encore=new RaceEncore(()=>.1);encore.start();
+  assert.match(encore.update(0,e,'si'),/刮痕/);
+  const history=[encore.current.id];encore.restAfter(6);
+  assert.equal(encore.update(.1,e,'si'),null);
+  for(let i=0;i<10;i++){
+    encore.next=encore.clock;const text=encore.update(.1,e,'si');
+    assert(!/莊：|龍泡泡：/.test(text),'solo never invents absent actors');
+    assert(!history.slice(-3).includes(encore.current.id));history.push(encore.current.id);
+    encore.restAfter(6);assert(encore.next>=encore.clock+11);
+  }
+  assert.equal(JSON.stringify(e),snapshot);
+  encore.reset();assert.equal(encore.update(1,e,'si'),null);
+});
+
+test('duel encore includes four actors, and failed jumps produce a different eligible gag',()=>{
+  const e=new RideEngine();e.setCharacter('zhuang');e.setOpponent(true);e.state='won';e.outcome='rival';e.jumpFails=1;
+  const encore=new RaceEncore(()=>.999);encore.start();
+  assert.match(encore.update(0,e,'zhuang'),/跳板/);
+  encore.next=0;assert.match(encore.update(.1,e,'zhuang'),/管理員/);
+  const parts=dialogueParts(encore.current.text,'zhuang');assert(parts.some(p=>p.speaker==='si'));assert(parts.some(p=>p.speaker==='zhuang'));
+});
+
+test('AI chooses early or late style, telegraphs both and keeps total strength close',()=>{
+  const runs=[.1,.9].map(random=>{
+    const e=new RideEngine(rideConfig,()=>random);e.setCharacter('zhuang');e.setOpponent(true);
+    let windups=0,halfTime=0;
+    for(let i=0;i<120*100&&!e.rival.finished;i++){
+      e.progress=e.rival.progress;e.prizeClock+=1/120;e.updateOpponent(1/120);
+      for(const event of e.takeEvents())if(event.action==='windup')windups++;
+      if(!halfTime&&e.rival.progress>=e.config.length/2)halfTime=e.rival.clock;
+    }
+    assert(e.rival.finished);assert(windups>0);return {style:e.rival.style,time:e.rival.clock,halfTime};
+  });
+  assert.deepEqual(runs.map(r=>r.style),['early','late']);
+  assert(runs[0].halfTime<runs[1].halfTime);assert(Math.abs(runs[0].time-runs[1].time)<3);
+});
 
 test('seated vehicles steer with yaw and continue sliding after releasing direction', () => {
   const e = new RideEngine(rideConfig); e.start(); advance(e, .8, { steer: 1 });
@@ -100,7 +140,7 @@ test('900 metre course covers all sectors, finishes without input and bounds a h
   const snapshot = JSON.stringify(e); advance(e, 2); assert.equal(JSON.stringify(e), snapshot);
 });
 
-const zhuangEngine = () => { const e = new RideEngine(); e.setCharacter('zhuang'); e.start(); return e; };
+const zhuangEngine = () => { const e = new RideEngine(rideConfig,()=>.1); e.setCharacter('zhuang'); e.start(); return e; };
 
 test('opening story immediately speaks, gives seven seconds of driving, then reveals the prize on a straight', () => {
   const e = zhuangEngine(); assert(e.pet.z < e.z); assert(!e.useGas());
@@ -261,8 +301,8 @@ test('optional Si opponent progresses independently, freezes with the race, and 
 });
 
 test('serious Si beats idling and careless boosts, but clean button steering, pickups and drift can win', () => {
-  const run = mode => {
-    const e = zhuangEngine(); e.setOpponent(true); let steer = 0, nextInput = 0;
+  const run = (mode,random=.1) => {
+    const e = zhuangEngine(); e.random=()=>random;e.setOpponent(true); let steer = 0, nextInput = 0;
     while (e.state === 'playing' && e.elapsed < 120) {
       if (e.takeoffPending) e.requestTakeoff();
       if (mode !== 'idle' && e.elapsed >= zhuangRace.raceAt) e.useGas();
@@ -281,6 +321,8 @@ test('serious Si beats idling and careless boosts, but clean button steering, pi
   assert(skill.pickups.size >= 4 && skill.driftCount >= 3);
   assert(skill.prizeClock < idle.rival.finishTime - 2, 'winning has room beyond one frame');
   assert(Math.abs(idle.rival.finishTime - careless.rival.finishTime) < 1e-8, 'AI pace is independent of player mistakes');
+  const lateIdle=run('idle',.9),lateSkill=run('skill',.9);
+  assert.equal(lateIdle.outcome,'rival');assert.equal(lateSkill.outcome,'player');
 });
 
 test('Si plans corners and finite bursts; passing reactions have cooldowns and freeze/reset with play', () => {
