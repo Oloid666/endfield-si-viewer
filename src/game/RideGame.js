@@ -70,9 +70,8 @@ export class RideGame extends RaftGame {
 
   message(text,mood=null){
     if(!this.raceDialogue){super.message(text);return;}
-    const e=this.engine,pet=/^(龍泡泡|小聰明)[：:]/.test(text);
-    const feeling=mood||(pet&&e.petGrudge>=3?'angry':null);
-    this.messageUntil=e.elapsed+this.raceDialogue.set(text,e.elapsed,this.character,feeling);
+    const e=this.engine;
+    this.messageUntil=e.elapsed+this.raceDialogue.set(text,e.elapsed,this.character,mood,e.petGrudge);
   }
 
   gameplayLine(events){

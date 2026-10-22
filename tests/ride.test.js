@@ -422,6 +422,15 @@ test('dialogue splits speakers into individual portraits and resolves comic mood
   assert.equal(dialogueParts('祀：領墨水。','si','dead')[0].mood,'dead');
 });
 
+test('grudge belongs to the player companion and is resolved per speaker, not shared with the opponent',()=>{
+  assert.equal(dialogueParts('小聰明：讓路！','zhuang',null,5)[0].mood,'calm');
+  assert.equal(dialogueParts('龍泡泡：我有記。','zhuang',null,3)[0].mood,'angry');
+  assert.equal(dialogueParts('小聰明：我有記。','si',null,5)[0].mood,'dead');
+  const parts=dialogueParts('莊：借過。龍泡泡：又是我。','zhuang',null,5);
+  assert.equal(parts[0].mood,'smug');assert.equal(parts[1].mood,'dead');
+  assert.equal(dialogueParts('龍泡泡：還好。','zhuang','panic',5)[0].mood,'panic');
+});
+
 test('Zhuang display uses the supplied rig, blinks, has a dragon, pauses and releases only its own props',async()=>{
   const model=await sourceModel('zhuang'),scene=new Group(),bounds=new Box3().setFromObject(model.group,true);
   const previous=globalThis.document;
