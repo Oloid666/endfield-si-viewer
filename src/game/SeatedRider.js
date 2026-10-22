@@ -51,11 +51,12 @@ export class SeatedRider {
     bone.updateWorldMatrix(false, true);
   }
 
-  update(time, lean, hit) {
+  update(time, lean, hit, pose = null) {
     if (!this.bones) return;
     for (const { bone, p, q, s } of this.bones) { bone.position.copy(p); bone.quaternion.copy(q); bone.scale.copy(s); }
     this.model.group.updateWorldMatrix(true, true);
     this.rotate('spine', [0, 0, 1], -lean * .18);
+    if (pose) this.rotate('spine', [1, 0, 0], -.18 * pose.determined);
     this.rotate('head', [0, 1, 0], -.3 + Math.sin(time * .8) * .12);
     this.rotate('head', [0, 0, 1], lean * .12 + hit * .18);
     for (const [index, side] of ['L', 'R'].entries()) {
@@ -63,7 +64,7 @@ export class SeatedRider {
       this.rotate(`knee${side}`, [1, 0, 0], 1.45);
       // Hands reach toward the armrest / ship grips; elbows point outwards.
       const sign = index ? -1 : 1;
-      this.target.set(sign * .35, .3, -.57); this.mount.localToWorld(this.target);
+      this.target.set(sign * .35, pose?.magic && side === 'R' ? .95 : .3, pose?.magic && side === 'R' ? -.85 : -.57); this.mount.localToWorld(this.target);
       this.pole.set(sign * 1.1, .1, -.1); this.mount.localToWorld(this.pole);
       this.solvers[side].solve(this.target, this.pole);
     }
