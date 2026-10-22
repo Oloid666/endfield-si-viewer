@@ -387,7 +387,7 @@ export class RideStage extends RaftStage {
     this.warning.rotation.z = Math.sin(time * 16) * engine.hit * .5;
     this.pickupMeshes.forEach((mesh, i) => { mesh.visible = !engine.pickups.has(i); mesh.position.y = 1.1 + (this.config.pickups[i].s >= zhuangRace.flightAt && !si ? zhuangRace.flightHeight : 0) + Math.sin(time * 3 + i) * .14; mesh.rotation.y = si ? time * 1.5 : 0; if (mesh.userData.cube) mesh.userData.cube.rotation.y = time * 1.5; if (mesh.userData.label) mesh.userData.label.quaternion.copy(this.scene.camera.quaternion); });
     const prop = si ? this.inkProp : this.dragonProp;
-    animateCompanion(prop,time,{mood:engine.petMood,wave:(!si&&engine.takeoffPending)||flair&&engine.flair===2?1:0,stress:engine.pet.hit+ (engine.gasTime>0 ? .5 : 0),blink:Math.max(0,1-Math.abs(time%(flair?2.3:5)-.15)/.1)});
+    animateCompanion(prop,time,{mood:engine.petMood,wave:(!si&&engine.takeoffPending)||flair&&engine.flair===2?1:0,stress:engine.pet.hit+ (engine.gasTime>0 ? .5 : 0),blink:Math.max(0,1-Math.abs(time%(flair?2.3:5)-.15)/.1),lookUp:si?.35:0});
     if(!si&&engine.takeoffPending)prop.root.rotation.y=Math.sin(time*18)*.25;
     this.petBody.scale.set(.85 + engine.hit * .2, .85 - engine.hit * .25, .85 + engine.hit * .2);
   }
@@ -441,13 +441,13 @@ export class RideStage extends RaftStage {
     this.pet.position.set(x+(hiding?-(duel?1.7:0)+.75:duel?-.45:1.6),.15+Math.abs(Math.sin(t*2))*.08,z+(hiding?-.4:1.2));
     this.pet.rotation.set(0,0,0);this.petBody.rotation.set(exhausted?-.25:0,0,exhausted?-.65:Math.sin(t*1.9)*.035);this.petBody.scale.setScalar(.85);
     const petId=this.character==='si'?'ink':'dragon',petTalking=talking&&speaker===petId;
-    animateCompanion(this.character==='si'?this.inkProp:this.dragonProp,t,{mood:petTalking?mood:exhausted?'dead':'calm',wave:petTalking?1:0,stress:petTalking&&mood==='panic'?.5:0,blink:Math.max(0,1-Math.abs(t%4.7-.12)/.1)});
+    animateCompanion(this.character==='si'?this.inkProp:this.dragonProp,t,{mood:petTalking?mood:exhausted?'dead':'calm',wave:petTalking?1:0,stress:petTalking&&mood==='panic'?.5:0,blink:Math.max(0,1-Math.abs(t%4.7-.12)/.1),lookUp:.25});
     if(duel){
       const o=this.opponent;o.root.visible=true;o.root.position.set(x+1.25,.95+Math.sin(t*1.7+2)*.04,z-.7);o.root.rotation.set(0,0,0);
       o.badge.visible=false;this.brushSeat.rotation.y=0;
       o.rig.update(t,0,0,{encore:true,talking:talking&&speaker==='si',gesture,wave:talking&&speaker==='si'&&gesture===1,lookBack:.4});
       this.inkBody.position.set(-.15,-.75,2.5);this.inkBody.rotation.set(0,0,Math.sin(t*2)*.06);this.inkBody.scale.setScalar(.75);
-      animateCompanion(this.inkProp,t,{mood:talking&&speaker==='ink'?mood:'calm',wave:talking&&speaker==='ink'?1:0,blink:Math.max(0,1-Math.abs(t%4.3-.1)/.1)});
+      animateCompanion(this.inkProp,t,{mood:talking&&speaker==='ink'?mood:'calm',wave:talking&&speaker==='ink'?1:0,blink:Math.max(0,1-Math.abs(t%4.3-.1)/.1),lookUp:.25});
     }
     this.frameEncoreCamera(engine);
   }

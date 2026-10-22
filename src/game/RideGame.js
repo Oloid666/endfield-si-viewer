@@ -153,7 +153,7 @@ export class RideGame extends RaftGame {
       const line=this.encore.update(delta,e,this.character);
       if(line)this.encore.restAfter(this.message(line));
       const clock=e.elapsed+this.encore.clock;this.raceDialogue.update(clock);
-      this.$('#ride-line').hidden=clock>=this.messageUntil;
+      this.$('#ride-line').hidden=false;
       const part=this.raceDialogue.parts?.[this.raceDialogue.index];
       this.stage.updateEncore(e,delta,{...part,gesture:this.encore.gesture,talking:clock<this.messageUntil});
       return;
