@@ -1,4 +1,4 @@
-import { BoxGeometry, BufferGeometry, CanvasTexture, CylinderGeometry, Float32BufferAttribute, Group, InstancedMesh, MeshBasicMaterial, PlaneGeometry, Quaternion, Shape, ShapeGeometry, TorusGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CanvasTexture, Color, CylinderGeometry, Float32BufferAttribute, Fog, Group, InstancedMesh, MeshBasicMaterial, PlaneGeometry, Quaternion, Shape, ShapeGeometry, TorusGeometry, Vector3 } from 'three';
 import { RaftStage } from './RaftStage.js';
 import { SeatedRider } from './SeatedRider.js';
 import { RideOpponent } from './RideOpponent.js';
@@ -6,6 +6,7 @@ import { rideConfig, rideProfiles, zhuangRideConfig } from '../config/rideConfig
 import { buildCompanion, buildFlyingBrush, animateCompanion } from './RideProps.js';
 import { takeoverBlend, zhuangRace } from './ZhuangRaceStory.js';
 import { encoreCast } from './EncorePlay.js';
+import { RaceTrialScenery } from './RaceTrialScenery.js';
 
 // A fan-made flying brush and a runaway office chair, not official assets.
 export class RideStage extends RaftStage {
@@ -49,6 +50,10 @@ export class RideStage extends RaftStage {
 
   build() {
     super.build();
+    if(this.config.trial){
+      const keep=new Set([this.raft,this.pet,this.rope,this.ripple,this.splashes]);
+      for(const child of this.root.children)if(!keep.has(child))child.visible=false;
+    }
     this.petBody.removeFromParent();
     this.inkProp = buildCompanion(this, 'ink'); this.dragonProp = buildCompanion(this, 'dragon');
     this.inkBody = this.inkProp.root; this.inkArms = this.inkProp.arms; this.inkTail = this.inkProp.tail;
@@ -60,6 +65,7 @@ export class RideStage extends RaftStage {
     this.buildStoryProps();
     this.buildDragonHazards();
     this.opponent = this.config.airHazards ? new RideOpponent(this) : null;
+    this.trialScenery=this.config.trial?new RaceTrialScenery(this):null;
   }
 
   buildStoryProps() {
@@ -85,7 +91,7 @@ export class RideStage extends RaftStage {
 
   updateStoryProps(engine) {
     const zhuang = this.character === 'zhuang';
-    this.sponsorBoard.visible = zhuang;
+    this.sponsorBoard.visible = zhuang&&!this.config.trial;
     this.spell.visible = zhuang && (engine.gasTime > 0 || engine.flying);
     this.spell.position.y = .18; this.spell.rotation.y = this.time * (engine.flying ? 5 : 2);
     this.spell.scale.setScalar((engine.flying ? 1.4 : 1) + Math.sin(this.time * 12) * .08);
@@ -163,16 +169,16 @@ export class RideStage extends RaftStage {
     for (let i = 0; i <= segments; i++) {
       const s = -25 + i * 5, x = this.center(s);
       vertices.push(x - half, .065, -s, x + half, .065, -s);
-      const inGap=c.jumps.some(j=>s>j.gapStart&&s<=j.gapEnd);
+      const inGap=c.trial?.gaps?.some(g=>s>g.start&&s<=g.end)||c.jumps.some(j=>s>j.gapStart&&s<=j.gapEnd);
       if (i&&!inGap) { const j = i * 2; indices.push(j - 2, j - 1, j, j - 1, j + 1, j); }
       const angle = -Math.atan(this.center(s + .5) - this.center(s - .5));
       if (i % 2 === 0&&!inGap) for (const offset of [-3.5, 3.5]) marks.push({ p: [x + offset, .08, -s], s: [.12, .015, 3], r: [0, angle, 0] });
       if (i % 2 === 0) for (const side of [-1, 1]) rail.push({ p: [x + side * (half + .1), .42, -s], s: [.2, .8, 2], r: [0, angle, 0] });
     }
     const geometry = this.own(new BufferGeometry()); geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3)); geometry.setIndex(indices); geometry.computeVertexNormals();
-    this.mesh(geometry, this.material(0x414f50), this.root);
+    this.mesh(geometry, this.material(c.trial?.road||0x414f50), this.root);
     this.instances(box, this.material(0xdfdeba), marks);
-    this.instances(box, this.material(0xd6be76), rail);
+    this.instances(box, this.material(c.trial?.rail||0xd6be76), rail);
     for(const j of c.jumps){
       this.mesh(box,this.material(0x102d2a),this.root,[this.center((j.gapStart+j.gapEnd)/2),-.02,-(j.gapStart+j.gapEnd)/2],[half*2,.1,j.gapEnd-j.gapStart]);
       const ramp=this.mesh(box,this.material(0xc4b261),this.root,[this.center(j.s),.24,-j.s],[j.width,.4,6]);ramp.rotation.x=.1;
@@ -262,6 +268,7 @@ export class RideStage extends RaftStage {
 
   resetEffects() {
     this.encoreReady=false;
+    this.encoreShot=null;
     if(this.petBody){this.petBody.position.set(0,0,0);this.petBody.rotation.set(0,0,0);this.petBody.scale.setScalar(.85);}
     if(this.rope)this.rope.visible=true;
     if(this.opponent?.rope)this.opponent.rope.visible=true;
@@ -330,8 +337,8 @@ export class RideStage extends RaftStage {
     for (const mesh of [this.smoke, this.stars, this.tracks]) mesh.instanceMatrix.needsUpdate = true;
   }
 
-  setCharacter(character) {
-    const config = character === 'zhuang' ? zhuangRideConfig : rideConfig;
+  setCharacter(character,trialConfig=null) {
+    const config = trialConfig||(character === 'zhuang' ? zhuangRideConfig : rideConfig);
     if (this.config !== config) {
       this.dispose();
       this.config = config; this.center = config.center;
@@ -339,6 +346,11 @@ export class RideStage extends RaftStage {
       this.resources = new Set(); this.scene.scene.add(this.root); this.build();
     }
     this.character = character; this.profile = rideProfiles[character];
+  }
+  attach(){
+    const ready=super.attach();
+    if(ready&&this.config.trial){const color=this.config.trial.sky;this.scene.scene.background=new Color(color);this.scene.scene.fog=new Fog(color,40,130);}
+    return ready;
   }
   canAttach(model) {
     if (!model || model.characterId !== this.character) return false;
@@ -377,8 +389,8 @@ export class RideStage extends RaftStage {
     }
     const seat = si ? this.brushSeat : this.chairSeat;
     const spin = Math.sin(time * 12) * engine.hit * (si ? .4 : .25);
-    const takeover = si ? 0 : takeoverBlend(engine.elapsed);
-    seat.rotation.y += (Math.PI * (1 - takeover) + spin - seat.rotation.y) * (1 - Math.exp(-dt * 4));
+    const takeover = si ? 0 : this.config.trial?1:takeoverBlend(engine.elapsed);
+    seat.rotation.y += ((this.config.trial&&!si?Math.PI:Math.PI*(1-takeover)) + spin - seat.rotation.y) * (1 - Math.exp(-dt * 4));
     const flair=engine.prizeClock<engine.flairUntil;
     this.rider.update(time, engine.heading, engine.hit, si ? {jump:engine.jumpHeight(),lookBack:flair&&engine.flair===1?.6:0,wave:flair&&engine.flair===2}: { determined: takeover, magic: engine.gasTime > 0 || engine.flying, story:engine.storyPhase, jump:engine.jumpHeight(),grudge:engine.petGrudge });
     this.brushCharge.visible=si&&engine.gasTime>0;
@@ -407,7 +419,7 @@ export class RideStage extends RaftStage {
     rope.needsUpdate = true;
     this.pet.position.y += this.profile.hover + .2;
     if(!engine.isZhuang)this.pet.position.y+=engine.jumpHeight(.25);
-    if (engine.isZhuang) {
+    if (engine.isZhuang&&!this.config.trial) {
       this.pet.position.y = engine.pet.y;
       const dt = engine.state === 'playing' ? Math.min(delta, .12) : 0;
       this.petSpin += (engine.pet.tumble - this.petSpin) * (1 - Math.exp(-dt * 10));
@@ -421,12 +433,14 @@ export class RideStage extends RaftStage {
     this.updateStoryProps(engine);
     this.updateEffects(engine, delta);
     this.opponent?.update(engine);
+    this.trialScenery?.update(engine);
   }
 
-  updateEncore(engine,delta,{speaker,mood='calm',gesture=0,talking=false,play=null}={}){
+  updateEncore(engine,delta,{speaker,mood='calm',gesture=0,talking=false,play=null,winner=null,focus=0}={}){
     if(!this.active)return;
     this.time+=Math.max(0,Math.min(delta,.12));
     const t=this.time,duel=engine.rival.enabled&&this.opponent?.ready;
+    this.encoreShot={winner,focus};
     if(!this.encoreReady){
       this.encoreReady=true;this.jetting=false;this.spell.visible=false;this.brushCharge.visible=false;
       for(const mesh of [this.smoke,this.stars,this.tracks,this.rush])mesh.visible=false;
@@ -436,11 +450,11 @@ export class RideStage extends RaftStage {
     const x=this.center(engine.config.length),z=-engine.config.length;
     this.raft.position.set(x-(duel?1.7:0),this.profile.hover+Math.sin(t*1.7)*.025,z);
     this.raft.rotation.set(0,Math.PI,Math.sin(t*1.3)*.012);
-    const seat=this.character==='si'?this.brushSeat:this.chairSeat;seat.rotation.y=0;
+    const seat=this.character==='si'?this.brushSeat:this.chairSeat;seat.rotation.y=this.character==='si'?-Math.PI/2:0;
     const ownAction=play?.sample(this.character);
     this.animateEncoreRider(this.raft,seat,ownAction);
     const ownTalking=talking&&speaker===this.character;
-    this.rider.update(t,0,0,{encore:true,talking:ownTalking,gesture:ownAction?2:gesture,story:'drag',wave:!!ownAction||ownTalking&&gesture===1});
+    this.rider.update(t,0,0,{encore:true,front:true,celebrating:winner===this.character?Math.max(.3,focus):0,talking:ownTalking,gesture:ownAction?2:gesture,story:'drag',wave:!!ownAction||ownTalking&&gesture===1});
     const hiding=gesture===1&&!talking,exhausted=gesture===0&&engine.petBumps>=4;
     this.pet.position.set(x+(hiding?-(duel?1.7:0)+.75:duel?-.45:1.6),.15+Math.abs(Math.sin(t*2))*.08,z+(hiding?-.4:1.2));
     this.pet.rotation.set(0,0,0);this.petBody.position.set(0,0,0);this.petBody.rotation.set(exhausted?-.25:0,0,exhausted?-.65:Math.sin(t*1.9)*.035);this.petBody.scale.setScalar(.85);
@@ -448,15 +462,25 @@ export class RideStage extends RaftStage {
     animateCompanion(this.character==='si'?this.inkProp:this.dragonProp,t,{mood:petTalking?mood:exhausted?'dead':'calm',wave:petTalking?1:0,stress:petTalking&&mood==='panic'?.5:0,blink:Math.max(0,1-Math.abs(t%4.7-.12)/.1),lookUp:.25});
     this.animateEncorePet(this.petBody,play?.sample(petId));
     if(duel){
-      const o=this.opponent;o.root.visible=true;o.root.position.set(x+1.25,.95+Math.sin(t*1.7+2)*.04,z-.7);o.root.rotation.set(0,0,0);
-      o.badge.visible=false;this.brushSeat.rotation.y=0;
+      const o=this.opponent;o.root.visible=true;o.root.position.set(x+1.6,.95+Math.sin(t*1.7+2)*.04,z+.65);o.root.rotation.set(0,0,0);
+      o.badge.visible=false;this.brushSeat.rotation.y=Math.PI/2;
       const siAction=play?.sample('si');this.animateEncoreRider(o.root,this.brushSeat,siAction);
-      o.rig.update(t,0,0,{encore:true,talking:talking&&speaker==='si',gesture:siAction?1:gesture,wave:!!siAction||talking&&speaker==='si'&&gesture===1,lookBack:.4});
-      this.inkBody.position.set(-.15,-.75,2.5);this.inkBody.rotation.set(0,0,Math.sin(t*2)*.06);this.inkBody.scale.setScalar(.75);
+      o.rig.update(t,0,0,{encore:true,front:true,celebrating:winner==='si'?Math.max(.3,focus):0,talking:talking&&speaker==='si',gesture:siAction?1:gesture,wave:!!siAction||talking&&speaker==='si'&&gesture===1,lookBack:.15});
+      this.inkBody.position.set(-.65,-.75,2.5);this.inkBody.rotation.set(0,0,Math.sin(t*2)*.06);this.inkBody.scale.setScalar(.75);
       animateCompanion(this.inkProp,t,{mood:talking&&speaker==='ink'?mood:'calm',wave:talking&&speaker==='ink'?1:0,blink:Math.max(0,1-Math.abs(t%4.3-.1)/.1),lookUp:.25});
       this.animateEncorePet(this.inkBody,play?.sample('ink'));
     }
     this.frameEncoreCamera(engine);
+    this.stars.visible=!!winner&&focus>.02;
+    if(this.stars.visible){
+      const head=winner===this.character?this.rider.nodes.head:this.opponent?.rig.nodes.head;
+      head.getWorldPosition(this.target);
+      for(let i=0;i<8;i++){
+        const a=i*Math.PI/4+t*.4;this.temp.position.copy(this.target).add(this.screenPoint.set(Math.cos(a)*.9,.3+Math.sin(a)*.65,.1));
+        this.temp.quaternion.copy(this.scene.camera.quaternion);this.temp.rotateZ(t*.9+i);this.temp.scale.setScalar((.55+Math.sin(t*4+i)*.15)*focus);this.temp.updateMatrix();this.stars.setMatrixAt(i,this.temp.matrix);
+      }
+      this.stars.instanceMatrix.needsUpdate=true;
+    }
   }
 
   animateEncoreRider(root,seat,action){
@@ -501,16 +525,29 @@ export class RideStage extends RaftStage {
   frameEncoreCamera(engine){
     const camera=this.scene.camera,rect=this.scene.renderer.domElement.getBoundingClientRect(),landscape=rect.width>rect.height;
     const x=this.center(engine.config.length),z=-engine.config.length;
-    camera.fov=landscape?43:46;
-    camera.position.set(x+(landscape?4.2:.4),landscape?4.2:4.8,z+(landscape?10.5:15.5));
-    // Leave the top for the compact score card and the lower left for portraits.
-    camera.lookAt(x+(landscape?4:0),landscape?2.2:3.4,z);camera.updateProjectionMatrix();
+    const area=this.encoreLayoutReader?.()||{left:16,right:landscape?rect.width*.49:rect.width-16,top:landscape?118:290,bottom:rect.height-160};
+    const width=Math.max(140,area.right-area.left),height=Math.max(120,area.bottom-area.top);
+    const {winner=null,focus=0}=this.encoreShot||{};
+    const duel=engine.rival.enabled&&this.opponent?.ready;
+    this.look.set(x,1.75,z+.5);
+    if(winner){
+      const head=winner===this.character?this.rider?.nodes.head:this.opponent?.rig.nodes.head;
+      if(head){head.getWorldPosition(this.target);this.target.y-=.1;this.look.lerp(this.target,focus);}
+    }
+    camera.fov=44;
+    const tan=Math.tan(camera.fov*Math.PI/360),halfHeight=1.8*(1-focus)+.72*focus,halfWidth=(duel?2.25:2.1)*(1-focus)+1.05*focus;
+    const distance=Math.max(5,halfHeight/(tan*height/rect.height*.92),halfWidth/(tan*camera.aspect*width/rect.width*.92));
+    camera.position.copy(this.look).add(this.screenPoint.set(0,distance*.14,distance));camera.lookAt(this.look);
+    // Fit into the actual space between the compact score and portrait, rather
+    // than hiding the tallest actor behind a fixed-height card on Safari.
+    camera.setViewOffset(rect.width,rect.height,rect.width/2-(area.left+width/2),rect.height/2-(area.top+height/2),rect.width,rect.height);
+    camera.updateProjectionMatrix();
   }
 
   frameCamera(engine, delta = 0) {
     if (!this.active) return;
     if(engine.state==='won'){this.frameEncoreCamera(engine);return;}
-    if (engine.isZhuang) { this.frameDrivingCamera(engine, delta); return; }
+    if (engine.isZhuang||this.config.trial) { this.frameDrivingCamera(engine, delta); return; }
     const camera = this.scene.camera, rect = this.scene.renderer.domElement.getBoundingClientRect();
     camera.fov = (this.saved.fov || 40) + Math.max(0, Math.min(1, (this.renderSpeed - this.config.speed) / 15)) * 8;
     const landscape = rect.width > rect.height, hover = this.profile.hover;

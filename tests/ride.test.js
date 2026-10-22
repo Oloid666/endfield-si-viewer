@@ -475,6 +475,17 @@ for (const id of ['si', 'zhuang']) test(`${id} source skeleton supports a seated
   model.gltf.scene.traverse(node => { node.geometry?.dispose(); for (const material of Array.isArray(node.material) ? node.material : [node.material]) material?.dispose(); });
 });
 
+test('victory smiles use eight real face joints on both supplied models and restore when celebration ends',async()=>{
+  for(const id of ['si','zhuang']){
+    const model=await sourceModel(id),rig=new SeatedRider(model,new Group(),2.6,{sideSaddle:id==='si'});assert(rig.attach());assert.equal(rig.smileBones.length,8);
+    rig.update(.5,0,0,{encore:true,front:true,celebrating:1});
+    for(const {bone,p}of rig.smileBones){assert(bone.position.y>p.y);assert(bone.position.toArray().every(Number.isFinite));}
+    rig.update(.7,0,0,{encore:true,front:true});for(const {bone,p}of rig.smileBones)assert(bone.position.equals(p));
+    rig.restore();for(const {bone,p}of rig.smileBones)assert(bone.position.equals(p));
+    model.gltf.scene.traverse(node=>{node.geometry?.dispose();for(const m of Array.isArray(node.material)?node.material:[node.material])m?.dispose();});
+  }
+});
+
 test('Si side-saddle bends both legs to one side, reaches the brush and can wave without moving the pelvis', async () => {
   const model = await sourceModel('si'), mount = new Group();
   const rig = new SeatedRider(model, mount, 2.6, { sideSaddle: true });

@@ -9,15 +9,16 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 export class RideEngine extends RaftEngine {
   constructor(config = rideConfig, random = Math.random) { super(config); this.baseConfig = config; this.random=random; }
 
-  setCharacter(character) { this.character = character === 'zhuang' ? 'zhuang' : 'si'; this.config = this.isZhuang ? zhuangRideConfig : this.baseConfig; this.reset(); }
+  setCharacter(character) { this.character = character === 'zhuang' ? 'zhuang' : 'si'; this.config = this.baseConfig.trial ? this.baseConfig : this.isZhuang ? zhuangRideConfig : this.baseConfig; this.reset(); }
   get isZhuang() { return this.character === 'zhuang'; }
-  get flying() { return this.isZhuang && this.flightStarted !== null; }
-  get timeScale() { return this.isZhuang && this.takeoffPending ? zhuangRace.decisionScale : 1; }
+  get storyRace() { return this.isZhuang && !this.config.trial; }
+  get flying() { return this.storyRace && this.flightStarted !== null; }
+  get timeScale() { return this.storyRace && this.takeoffPending ? zhuangRace.decisionScale : 1; }
   get prizeRemaining() { return this.prizeDeadline === null ? null : Math.max(0, this.prizeDeadline - this.prizeClock); }
   setOpponent(enabled) {
     this.rivalEnabled = !!enabled;
     const style=(this.random?.()??Math.random())<.5?'early':'late';
-    this.rival = { enabled: this.isZhuang && !!enabled, style, progress: 0, speed: rivalRideConfig.introSpeed, offset: -rivalRideConfig.lane, clock: 0,
+    this.rival = { enabled: this.storyRace && !!enabled, style, progress: 0, speed: rivalRideConfig.introSpeed, offset: -rivalRideConfig.lane, clock: 0,
       finished: false, finishTime: null, burst: 0, windup:0, queued:false, nextBurst: zhuangRace.raceAt + 1, bursts: 0, cornering: false,
       lead: 0, nextQuip: zhuangRace.raceAt + 5, reactionUntil: 0, reaction: null, near: false };
   }
@@ -41,7 +42,7 @@ export class RideEngine extends RaftEngine {
     this.events = [];
     this.sector = 0;
     this.topSpeed = this.speed;
-    this.storyPhase = this.isZhuang ? 'drag' : null;
+    this.storyPhase = this.storyRace ? 'drag' : null;
     this.lastStoryPhase = null; this.flightStarted = null; this.takeoffPending = false;
     this.prizeClock = 0; this.prizeDeadline = null; this.outcome = null;
     this.setOpponent(this.rivalEnabled); this.steerHeld = this.lastSteer = 0;
@@ -52,7 +53,7 @@ export class RideEngine extends RaftEngine {
     this.rescueStarted=null;
     this.petGrudge=0;this.grudgeDecayAt=0;this.lastGapBand=null;this.nextGapLineAt=0;
     this.flair=0;this.flairUntil=0;this.nextFlairAt=5+(this.random?.()??Math.random())*4;
-    if (this.isZhuang) { this.speed = this.topSpeed = zhuangRace.introSpeed; this.gasLeft = 2; this.pet.z = -this.config.ropeLength; }
+    if (this.storyRace) { this.speed = this.topSpeed = zhuangRace.introSpeed; this.gasLeft = 2; this.pet.z = -this.config.ropeLength; }
   }
 
   get driftTier() { return this.charge >= .95 ? 3 : this.charge >= .6 ? 2 : this.charge >= .28 ? 1 : 0; }
@@ -60,7 +61,7 @@ export class RideEngine extends RaftEngine {
   takeEvents() { return this.events.splice(0); }
 
   useGas() {
-    if (this.isZhuang && (this.elapsed < zhuangRace.raceAt || this.takeoffPending)) return false;
+    if (this.storyRace && (this.elapsed < zhuangRace.raceAt || this.takeoffPending)) return false;
     if (this.state !== 'playing' || !this.gasLeft || this.gasTime > 0) return false;
     this.gasLeft--; this.gasUsed++;
     this.gasTime = this.config.gas.seconds;
@@ -71,7 +72,7 @@ export class RideEngine extends RaftEngine {
   }
 
   requestTakeoff() {
-    if (!this.isZhuang || this.state !== 'playing' || !this.takeoffPending || this.flying) return false;
+    if (!this.storyRace || this.state !== 'playing' || !this.takeoffPending || this.flying) return false;
     this.flightStarted = this.elapsed; this.takeoffPending = false;
     this.storyPhase = this.lastStoryPhase = 'flight';
     this.hitStop = this.cooldown = this.hit = 0;
@@ -134,7 +135,7 @@ export class RideEngine extends RaftEngine {
   step(dt, steer, brake) {
     const c = this.config, d = c.driving;
     this.elapsed += dt;
-    if (this.isZhuang) {
+    if (this.storyRace) {
       this.storyPhase = zhuangPhase(this.elapsed, this.progress, false, this.flying);
       if (this.storyPhase !== this.lastStoryPhase) {
         if (this.storyPhase === 'takeoff') {
@@ -147,6 +148,7 @@ export class RideEngine extends RaftEngine {
       this.lastSteer = steer;
       brake = this.steerHeld >= zhuangRace.steeringHold && this.elapsed >= zhuangRace.raceAt;
     }
+    if(c.autoDrift)brake=Math.abs(steer)>.15;
     dt *= this.timeScale;
     this.prizeClock += dt;
     if(this.prizeClock>=this.nextFlairAt){this.flair=Math.floor((this.random?.()??Math.random())*3);this.flairUntil=this.prizeClock+1.6;this.nextFlairAt=this.prizeClock+8+(this.random?.()??Math.random())*5;}
@@ -171,9 +173,9 @@ export class RideEngine extends RaftEngine {
     this.braking = brake;
     const headingTarget = steer * (brake ? d.driftTurn : d.turn);
     this.heading += (headingTarget - this.heading) * (1 - Math.exp(-dt * (brake ? 8 : 4.8)));
-    const storySpeed = !this.isZhuang ? c.speed : this.flying ? zhuangRace.flightSpeed : this.storyPhase === 'impatient' ? 40 : zhuangRace.introSpeed + (zhuangRace.speed - zhuangRace.introSpeed) * takeoverBlend(this.elapsed);
-    const topSpeed = Math.min(this.isZhuang ? zhuangRace.maxSpeed : c.maxSpeed, storySpeed + (this.boost ? this.boostPower : 0) + (this.gasTime ? c.gas.speed : 0));
-    const targetSpeed = (brake ? this.isZhuang ? topSpeed * .93 : c.brakeSpeed : topSpeed) * (this.cooldown > .2 ? .68 : 1);
+    const storySpeed = !this.storyRace ? c.speed : this.flying ? zhuangRace.flightSpeed : this.storyPhase === 'impatient' ? 40 : zhuangRace.introSpeed + (zhuangRace.speed - zhuangRace.introSpeed) * takeoverBlend(this.elapsed);
+    const topSpeed = Math.min(this.storyRace ? zhuangRace.maxSpeed : c.maxSpeed, storySpeed + (this.boost ? this.boostPower : 0) + (this.gasTime ? c.gas.speed : 0));
+    const targetSpeed = (brake ? this.storyRace ? topSpeed * .93 : c.brakeSpeed : topSpeed) * (this.cooldown > .2 ? .68 : 1);
     this.speed += (targetSpeed - this.speed) * (1 - Math.exp(-dt * d.acceleration));
     this.topSpeed = Math.max(this.topSpeed, this.speed);
     const lateralTarget = Math.sin(this.heading) * this.speed * d.sidePower;
@@ -183,7 +185,7 @@ export class RideEngine extends RaftEngine {
     this.velocity -= this.curvature(this.progress) * this.speed ** 2 * d.curveForce * (this.flying ? .4 : 1) * dt;
     this.drift = Math.sin(this.heading) * this.speed - this.velocity;
     const slip = Math.abs(this.heading - Math.atan2(this.velocity, this.speed));
-    this.isDrifting = brake && Math.abs(steer) > .15 && this.speed > d.minDriftSpeed && (this.isZhuang || slip > .08);
+    this.isDrifting = brake && Math.abs(steer) > .15 && this.speed > d.minDriftSpeed && (this.storyRace || slip > .08);
     if (this.isDrifting) {
       this.charge = Math.min(1, this.charge + dt * (.65 + Math.min(.35, slip)));
       this.bestCharge = Math.max(this.bestCharge, this.charge);
@@ -229,7 +231,7 @@ export class RideEngine extends RaftEngine {
     }
     if (this.progress >= c.length) {
       this.state = 'won'; this.isDrifting = false;
-      if (this.isZhuang) {
+      if (this.storyRace) {
         this.storyPhase = 'finish';
         this.outcome = this.rival.enabled && this.rival.finished ? 'rival' : this.prizeRemaining === 0 ? 'late' : 'player';
       }
@@ -260,7 +262,7 @@ export class RideEngine extends RaftEngine {
   rememberPetHit(){this.petGrudge=Math.min(5,this.petGrudge+1);this.grudgeDecayAt=this.prizeClock+9;if(this.petGrudge===3)this.emit('grudge');}
 
   updatePet(dt, brake) {
-    if (!this.isZhuang) { super.updatePet(dt, brake);this.pet.y=1.2+this.jumpHeight(.25);this.pet.hit=Math.max(0,this.pet.hit-dt*2);return; }
+    if (!this.storyRace) { super.updatePet(dt, brake);this.pet.y=1.2+this.jumpHeight(.25);this.pet.hit=Math.max(0,this.pet.hit-dt*2);return; }
     const p = this.pet, oldX = p.x, oldZ = p.z;
     p.hit = Math.max(0, p.hit - dt * (this.flying ? 1.5 : 2));
     p.cooldown = Math.max(0, p.cooldown - dt);
@@ -307,12 +309,12 @@ export class RideEngine extends RaftEngine {
 
   bump(kind, direction = 1) {
     if (this.cooldown > 0) return false;
-    this.cooldown = .95; this.hit = 1; this.hitStop = this.isZhuang ? 0 : .06; this.impactX = direction;
-    this.bumps++; this.speed = Math.max(5, this.speed * (this.isZhuang ? .85 : .6));
+    this.cooldown = .95; this.hit = 1; this.hitStop = this.storyRace ? 0 : .06; this.impactX = direction;
+    this.bumps++; this.speed = Math.max(5, this.speed * (this.storyRace ? .85 : .6));
     this.velocity *= -.45;
     this.boost = this.gasTime = this.charge = 0;
     this.pet.vx -= direction * 4; this.pet.vz += 3;
-    if(!this.isZhuang){this.petBumps++;this.petGroundBumps++;this.pet.hit=1;this.rememberPetHit();}
+    if(!this.storyRace){this.petBumps++;this.petGroundBumps++;this.pet.hit=1;this.rememberPetHit();}
     this.emit('collision', { kind });
     return true;
   }

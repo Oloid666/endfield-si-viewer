@@ -11,9 +11,12 @@ export class SeatedRider {
     this.wave = this.lookBack = this.lastPoseTime = 0;
     const profile = seatedRigNodes[model.characterId];
     this.nodes = {};
+    this.smileBones=[];
+    const smileIds=model.characterId==='si'?[227,228,237,238,231,232,241,242]:[171,172,181,182,175,176,185,186];
     model.gltf.scene.traverse(node => {
       const id = model.gltf.parser.associations.get(node)?.nodes;
       for (const [name, index] of Object.entries(profile || {})) if (id === index && node.isBone) this.nodes[name] = node;
+      if(node.isBone&&smileIds.includes(id))this.smileBones.push({bone:node,p:node.position.clone()});
     });
     this.supported = !!profile && Object.keys(profile).every(key => this.nodes[key]);
     for (const side of ['L', 'R']) {
@@ -60,11 +63,12 @@ export class SeatedRider {
     this.wave += ((pose?.wave ? 1 : 0) - this.wave) * follow;
     this.lookBack += ((pose?.lookBack || 0) - this.lookBack) * follow;
     for (const { bone, p, q, s } of this.bones) { bone.position.copy(p); bone.quaternion.copy(q); bone.scale.copy(s); }
+    for(const {bone,p}of this.smileBones){bone.position.copy(p);if(pose?.celebrating)bone.position.y+=.00065*pose.celebrating;}
     this.model.group.updateWorldMatrix(true, true);
     this.rotate('spine', [0, 0, 1], -lean * .18);
-    if (this.sideSaddle) this.rotate('spine', [0, 1, 0], -.9);
+    if (this.sideSaddle) this.rotate('spine', [0, 1, 0], pose?.front?-.1:-.9);
     if (pose?.determined) this.rotate('spine', [1, 0, 0], -.18 * pose.determined);
-    this.rotate('head', [0, 1, 0], (this.sideSaddle ? -.35 + this.lookBack * .65 : -.3) + Math.sin(time * .8) * .12);
+    this.rotate('head', [0, 1, 0], (pose?.front?0:this.sideSaddle ? -.35 + this.lookBack * .65 : -.3) + Math.sin(time * .8) * .12);
     this.rotate('head', [0, 0, 1], lean * .12 + hit * .18);
     if(pose?.encore){
       this.rotate('spine',[1,0,0],Math.sin(time*1.7)*.035);
@@ -97,5 +101,6 @@ export class SeatedRider {
 
   restore() {
     for (const { bone, p, q, s } of this.bones || []) { bone.position.copy(p); bone.quaternion.copy(q); bone.scale.copy(s); }
+    for(const {bone,p}of this.smileBones)bone.position.copy(p);
   }
 }
