@@ -1,9 +1,9 @@
 import { BoxGeometry, BufferGeometry, CanvasTexture, CylinderGeometry, Float32BufferAttribute, Group, InstancedMesh, MeshBasicMaterial, PlaneGeometry, Quaternion, Shape, ShapeGeometry, TorusGeometry, Vector3 } from 'three';
 import { RaftStage } from './RaftStage.js';
 import { SeatedRider } from './SeatedRider.js';
-import { rideConfig, rideProfiles } from '../config/rideConfig.js';
+import { rideConfig, rideProfiles, zhuangRideConfig } from '../config/rideConfig.js';
 import { buildCompanion, buildMiniDijiang } from './RideProps.js';
-import { bridgePoint, takeoverBlend, zhuangRace } from './ZhuangRaceStory.js';
+import { takeoverBlend, zhuangRace } from './ZhuangRaceStory.js';
 
 // A fan-made miniature ship and a runaway office chair, not official assets.
 export class RideStage extends RaftStage {
@@ -35,10 +35,11 @@ export class RideStage extends RaftStage {
       this.mesh(box, steel, this.chairSeat, [side * .57, .14, .1], [.07, .38, .07]);
       this.mesh(box, dark, this.chairSeat, [side * .57, .35, -.03], [.18, .1, .8]);
     }
+    this.chairWheels = [];
     for (let i = 0; i < 5; i++) {
       const angle = i * Math.PI * 2 / 5;
       const spoke = this.mesh(box, steel, this.chair, [Math.sin(angle) * .36, .16, Math.cos(angle) * .36], [.1, .09, .8]); spoke.rotation.y = angle;
-      const wheel = this.mesh(cylinder, dark, this.chair, [Math.sin(angle) * .73, .12, Math.cos(angle) * .73], [.13, .13, .13]); wheel.rotation.z = Math.PI / 2;
+      const wheel = this.mesh(cylinder, dark, this.chair, [Math.sin(angle) * .73, .12, Math.cos(angle) * .73], [.13, .13, .13]); wheel.rotation.z = Math.PI / 2; this.chairWheels.push(wheel);
     }
     this.warning = this.mesh(box, orange, this.chairSeat, [0, .1, .53], [.8, .14, .04]);
     this.vehicleParts = { sphere, cone, pale, jade, dark };
@@ -55,12 +56,11 @@ export class RideStage extends RaftStage {
     this.buildRoad();
     this.buildEffects();
     this.buildStoryProps();
+    this.buildDragonHazards();
   }
 
   buildStoryProps() {
     const box = this.own(new BoxGeometry(1, 1, 1));
-    this.bridge = new InstancedMesh(box, this.material(0xb6cca0, { emissive: 0x47785d, emissiveIntensity: .55 }), 84);
-    this.bridge.frustumCulled = false; this.bridge.visible = false; this.root.add(this.bridge);
     this.spell = new Group(); this.raft.add(this.spell);
     const glow = this.own(new MeshBasicMaterial({ color: 0xe7db8d, transparent: true, opacity: .85, depthWrite: false }));
     const ring = this.mesh(this.own(new TorusGeometry(1.25, .045, 4, 32)), glow, this.spell);
@@ -76,32 +76,54 @@ export class RideStage extends RaftStage {
     ctx.strokeStyle = '#dfce88'; ctx.lineWidth = 12; ctx.strokeRect(6, 6, 500, 180);
     ctx.fillStyle = '#efe6b9'; ctx.textAlign = 'center'; ctx.font = 'bold 46px sans-serif'; ctx.fillText('冠軍神祕獎品', 256, 78);
     ctx.font = 'bold 35px sans-serif'; ctx.fillText('贊助：管理員', 256, 145);
-    this.sponsorBoard = this.mesh(this.own(new PlaneGeometry(5, 1.875)), this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(canvas)) })), this.root, [this.center(80) + 5, 3.2, -80]);
+    this.sponsorBoard = this.mesh(this.own(new PlaneGeometry(5, 1.875)), this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(canvas)) })), this.root, [this.center(320) + 6, 3.2, -320]);
     this.sponsorBoard.visible = false;
   }
 
   updateStoryProps(engine) {
     const zhuang = this.character === 'zhuang';
     this.sponsorBoard.visible = zhuang;
-    this.spell.visible = zhuang && (engine.gasTime > 0 || engine.onBridge);
-    this.spell.position.y = .18; this.spell.rotation.y = this.time * 2;
-    this.spell.scale.setScalar(1 + Math.sin(this.time * 12) * .08);
-    this.bridge.visible = zhuang && engine.onBridge;
-    if (!this.bridge.visible) return;
-    let index = 0;
-    for (let i = 0; i < 28; i++) {
-      const s = zhuangRace.bridgeAt + (i + .5) * 5;
-      const p = bridgePoint(s, engine.bridgeOffset), next = bridgePoint(s + .5, engine.bridgeOffset), prev = bridgePoint(s - .5, engine.bridgeOffset);
-      const grow = Math.max(0, Math.min(1, (engine.progress + 40 - s) / 16));
-      const angle = -Math.atan2(next.x - prev.x, 1), pitch = Math.atan2(next.y - prev.y, Math.hypot(next.x - prev.x, 1));
-      for (const side of [0, -1, 1]) {
-        this.temp.position.set(p.x + side * 3.05 * Math.cos(angle), p.y + (side ? .38 : -.12) - (1 - grow) * 2, p.z + side * 3.05 * -Math.sin(angle));
-        this.temp.rotation.set(pitch, angle, 0);
-        this.temp.scale.set(side ? .16 : 6.1, (side ? .6 : .35) * grow, 5.3 * grow);
-        this.temp.updateMatrix(); this.bridge.setMatrixAt(index++, this.temp.matrix);
-      }
+    this.spell.visible = zhuang && (engine.gasTime > 0 || engine.flying);
+    this.spell.position.y = .18; this.spell.rotation.y = this.time * (engine.flying ? 5 : 2);
+    this.spell.scale.setScalar((engine.flying ? 1.4 : 1) + Math.sin(this.time * 12) * .08);
+    this.chairWheels.forEach(wheel => { wheel.position.y = engine.flying ? .6 : .12; });
+    this.airSigns?.forEach((mesh, i) => {
+      if (engine.airHit.has(i)) {
+        this.signHitAt[i] ??= this.time;
+        const t = this.time - this.signHitAt[i];
+        mesh.rotation.z = Math.min(1.5, t * 3) * (i % 2 ? -1 : 1);
+        mesh.position.y = this.config.airHazards[i].height - t * 2;
+        mesh.visible = t < 1.4;
+      } else { mesh.visible = true; mesh.rotation.z = 0; mesh.position.y = this.config.airHazards[i].height; }
+    });
+    this.roadSigns?.forEach((mesh, i) => { mesh.rotation.z = engine.groundHit.has(i) ? .9 : 0; });
+  }
+
+  buildDragonHazards() {
+    this.airSigns = []; this.roadSigns = []; this.signHitAt = [];
+    if (!this.config.airHazards) return;
+    const box = this.own(new BoxGeometry(1, 1, 1)), dark = this.material(0x294b45), gold = this.material(0xe5c47d);
+    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 128;
+    const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, 512, 128);
+    ctx.fillStyle = '#ebd69b18'; ctx.fillRect(0, 0, 512, 128);
+    ctx.strokeStyle = '#e8d391cc'; ctx.lineWidth = 5; ctx.strokeRect(3, 3, 506, 122);
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(512, 128); ctx.moveTo(512, 0); ctx.lineTo(0, 128); ctx.stroke();
+    ctx.fillStyle = '#e8d391cc'; ctx.font = 'bold 80px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', 256, 93);
+    const material = this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(canvas)), transparent: true, depthWrite: false }));
+    for (const item of this.config.airHazards) {
+      const root = new Group(); root.position.set(this.center(item.s) + item.offset, item.height, -item.s); this.root.add(root);
+      this.mesh(this.own(new PlaneGeometry(item.width, item.tall)), material, root);
+      this.mesh(box, dark, root, [0, item.tall / 2, 0], [item.width, .16, .18]);
+      for (const side of [-1, 1]) this.mesh(box, gold, root, [side * item.width * .46, -item.tall * .4, 0], [.12, item.tall * 1.5, .12]);
+      this.airSigns.push(root);
     }
-    this.bridge.instanceMatrix.needsUpdate = true;
+    for (const item of this.config.petHazards) {
+      const root = new Group(); root.position.set(this.center(item.s) + item.offset, .65, -item.s); this.root.add(root);
+      this.mesh(box, dark, root, [0, -.2, 0], [.18, 1.4, .18]);
+      const sign = this.mesh(box, gold, root, [0, .4, 0], [1.2, 1.2, .18]); sign.rotation.z = Math.PI / 4;
+      this.mesh(box, dark, root, [0, .4, .12], [.2, .65, .08]);
+      this.roadSigns.push(root);
+    }
   }
 
   buildRoad() {
@@ -180,7 +202,7 @@ export class RideStage extends RaftStage {
   }
 
   resetEffects() {
-    this.bridgeShot = false;
+    this.petSpin = this.lastFXPetBumps = 0; this.signHitAt = [];
     this.puffIndex = this.trackIndex = this.emitClock = this.trackClock = this.lastFXBumps = 0;
     for (const item of [...this.puffs, ...this.starParticles, ...this.trackParticles]) item.life = 0;
     for (const mesh of [this.smoke, this.stars, this.tracks]) mesh.visible = false;
@@ -198,7 +220,13 @@ export class RideStage extends RaftStage {
       for (let i = 0; i < 12; i++) this.puff(engine.x + Math.sin(i) * .6, this.profile.hover + .6, engine.z, 1.2, 0);
       this.starParticles.forEach((p, i) => Object.assign(p, { life: 1, x: engine.x, y: this.profile.hover + 1.7, z: engine.z, vx: Math.cos(i * 2.4) * 3, vy: 2.5 + i % 3, vz: Math.sin(i * 2.4) * 3 }));
     }
-    const jet = engine.gasTime > 0 || engine.boost > 0;
+    if (engine.isZhuang && engine.petBumps > this.lastFXPetBumps) {
+      this.lastFXPetBumps = engine.petBumps;
+      const p = engine.pet, power = engine.flying ? 2 : 1;
+      this.starParticles.forEach((star, i) => Object.assign(star, { life: 1, x: p.x, y: p.y + .4, z: p.z, vx: Math.cos(i * 2.4) * 3 * power, vy: (2.5 + i % 3) * power, vz: Math.sin(i * 2.4) * 3 * power }));
+      for (let i = 0; i < 6; i++) this.puff(p.x, p.y, p.z, power, 0);
+    }
+    const jet = engine.gasTime > 0 || engine.boost > 0 || engine.flying;
     if (jet) {
       this.emitClock += dt;
       while (this.emitClock > .04) {
@@ -206,7 +234,7 @@ export class RideStage extends RaftStage {
         this.puff(this.emitter.x, this.emitter.y, this.emitter.z, engine.gasTime ? 2.2 : 1.2, engine.speed);
       }
     }
-    if (engine.isDrifting) {
+    if (engine.isDrifting && !engine.flying) {
       this.trackClock += dt;
       while (this.trackClock > .045) {
         this.trackClock -= .045;
@@ -229,7 +257,16 @@ export class RideStage extends RaftStage {
     for (const mesh of [this.smoke, this.stars, this.tracks]) mesh.instanceMatrix.needsUpdate = true;
   }
 
-  setCharacter(character) { this.character = character; this.profile = rideProfiles[character]; }
+  setCharacter(character) {
+    const config = character === 'zhuang' ? zhuangRideConfig : rideConfig;
+    if (this.config !== config) {
+      this.dispose();
+      this.config = config; this.center = config.center;
+      this.root = new Group(); this.root.visible = false; this.root.name = 'seated-ride-prototype';
+      this.resources = new Set(); this.scene.scene.add(this.root); this.build();
+    }
+    this.character = character; this.profile = rideProfiles[character];
+  }
   canAttach(model) {
     if (!model || model.characterId !== this.character) return false;
     this.rider = new SeatedRider(model, this.character === 'si' ? this.shipMount : this.chairMount, this.config.actorHeight);
@@ -256,29 +293,28 @@ export class RideStage extends RaftStage {
     const dt = Math.max(0, time - (this.lastTime || 0)); this.lastTime = time;
     const si = this.character === 'si';
     this.raft.position.y = engine.height + this.profile.hover + Math.sin(time * 3) * (si ? .12 : .025);
-    const routeHeading = engine.onBridge ? -Math.atan(bridgePoint(engine.progress + .5, engine.bridgeOffset).x - bridgePoint(engine.progress - .5, engine.bridgeOffset).x) : -Math.atan(this.center(engine.progress + .5) - this.center(engine.progress - .5));
+    const routeHeading = -Math.atan(this.center(engine.progress + .5) - this.center(engine.progress - .5));
     this.raft.rotation.y = routeHeading - engine.heading;
     this.raft.rotation.z = Math.max(-.38, Math.min(.38, -engine.drift * .065 - engine.heading * .2));
-    this.raft.rotation.x = si ? -.04 - (engine.boost ? .08 : 0) + engine.hit * .15 : engine.hit * -.17;
+    this.raft.rotation.x = si ? -.04 - (engine.boost ? .08 : 0) + engine.hit * .15 : engine.flying ? -.13 + Math.sin(time * 9) * .035 : engine.hit * -.17;
     if (engine.spins > this.lastSpins || engine.bumps > this.lastBumps) {
       if (si || engine.elapsed >= zhuangRace.raceAt) this.seatSpin += Math.PI;
       this.lastSpins = engine.spins; this.lastBumps = engine.bumps;
       this.shotUntil = time + 1.4;
     }
     const seat = si ? this.shipSeat : this.chairSeat;
-    if (!si && engine.onBridge && !this.bridgeShot) { this.seatSpin = 0; this.bridgeShot = true; }
-    const spin = si ? Math.sin(time * 12) * engine.hit * .4 : this.seatSpin;
+    const spin = Math.sin(time * 12) * engine.hit * (si ? .4 : .25);
     const takeover = si ? 0 : takeoverBlend(engine.elapsed);
     seat.rotation.y += (Math.PI * (1 - takeover) + spin - seat.rotation.y) * (1 - Math.exp(-dt * 4));
-    this.rider.update(time, engine.heading, engine.hit, si ? null : { determined: takeover, magic: engine.gasTime > 0 || engine.onBridge });
-    this.renderSpeed = engine.speed; this.jetting = engine.boost > 0 || engine.gasTime > 0;
+    this.rider.update(time, engine.heading, engine.hit, si ? null : { determined: takeover, magic: engine.gasTime > 0 || engine.flying });
+    this.renderSpeed = engine.speed; this.jetting = engine.boost > 0 || engine.gasTime > 0 || engine.flying;
     for (const flame of this.flames) flame.scale.y = (engine.state === 'playing' ? .9 + Math.sin(time * 34) * .16 + (engine.gasTime ? 3 : engine.boost ? 1.8 : 0) : .4);
     // Base stage writes the rope after this hook; height correction follows in update.
     this.ropeHeight = si ? 1.2 : .35;
     this.warning.rotation.z = Math.sin(time * 16) * engine.hit * .5;
-    this.pickupMeshes.forEach((mesh, i) => { mesh.visible = !engine.pickups.has(i); mesh.position.y = 1.1 + Math.sin(time * 3 + i) * .14; mesh.rotation.y = time * 1.5; });
+    this.pickupMeshes.forEach((mesh, i) => { mesh.visible = !engine.pickups.has(i); mesh.position.y = 1.1 + (this.config.pickups[i].s >= zhuangRace.flightAt && !si ? zhuangRace.flightHeight : 0) + Math.sin(time * 3 + i) * .14; mesh.rotation.y = time * 1.5; });
     const prop = si ? this.inkProp : this.dragonProp;
-    prop.face.material.map = prop.maps[engine.hit > .1 || engine.gasTime > 0 || (!si && takeover > .5) ? 1 : 0];
+    prop.face.material.map = prop.maps[engine.hit > .1 || engine.gasTime > 0 || (!si && engine.pet.hit > .1) ? 1 : 0];
     this.petBody.scale.set(.85 + engine.hit * .2, .85 - engine.hit * .25, .85 + engine.hit * .2);
   }
 
@@ -286,32 +322,43 @@ export class RideStage extends RaftStage {
     super.update(engine, delta);
     if (!this.active) return;
     const rope = this.rope.geometry.attributes.position;
-    const petHeight = engine.onBridge ? bridgePoint(-engine.pet.z, engine.bridgeOffset).y : 0;
+    const petHeight = engine.isZhuang ? engine.pet.y - .6 : 0;
     for (let i = 0; i < rope.count; i++) {
       const a = i / (rope.count - 1);
       rope.setY(i, rope.getY(i) + this.ropeHeight + engine.height * (1 - a) + petHeight * a);
       if (engine.isZhuang) rope.setZ(i, engine.z + (engine.pet.z - engine.z) * a);
     }
     rope.needsUpdate = true;
-    this.pet.position.y += this.profile.hover + .2 + petHeight;
-    if (engine.isZhuang) this.pet.rotation.y = Math.atan2(this.scene.camera.position.x - this.pet.position.x, this.scene.camera.position.z - this.pet.position.z);
+    this.pet.position.y += this.profile.hover + .2;
+    if (engine.isZhuang) {
+      this.pet.position.y = engine.pet.y;
+      const dt = engine.state === 'playing' ? Math.min(delta, .12) : 0;
+      this.petSpin += (engine.pet.tumble - this.petSpin) * (1 - Math.exp(-dt * 10));
+      this.dragon.rotation.z = -engine.pet.angle * .5 + this.petSpin;
+      this.dragon.rotation.x = engine.flying ? Math.sin(this.time * 13) * engine.pet.hit * .9 : 0;
+      const hit = engine.pet.hit;
+      this.dragon.scale.set(.85 + hit * .35, .85 - hit * .35, .85 + hit * .2);
+      this.pet.rotation.y = Math.atan2(this.scene.camera.position.x - this.pet.position.x, this.scene.camera.position.z - this.pet.position.z);
+      this.stamps.forEach((mesh, i) => { if (this.config.stamps[i].s >= zhuangRace.flightAt) mesh.position.y += zhuangRace.flightHeight; });
+    }
     this.updateStoryProps(engine);
     this.updateEffects(engine, delta);
   }
 
   frameCamera(engine, delta = 0) {
     if (!this.active) return;
+    if (engine.isZhuang) { this.frameDrivingCamera(engine, delta); return; }
     const camera = this.scene.camera, rect = this.scene.renderer.domElement.getBoundingClientRect();
     camera.fov = (this.saved.fov || 40) + Math.max(0, Math.min(1, (this.renderSpeed - this.config.speed) / 15)) * 8;
     const landscape = rect.width > rect.height, hover = this.profile.hover;
     const close = this.character === 'si' && this.time < this.shotUntil;
-    const angle = this.character === 'zhuang' ? .5 + takeoverBlend(engine.elapsed) * 1.85 : Math.atan2(engine.pet.x - engine.x, Math.max(2, engine.pet.z - engine.z)) + .25;
+    const angle = Math.atan2(engine.pet.x - engine.x, Math.max(2, engine.pet.z - engine.z)) + .25;
     this.desiredCameraDirection.set(Math.sin(angle) * .86, .5, Math.cos(angle) * .86);
     if (this.firstFrame || !delta) this.cameraDirection.copy(this.desiredCameraDirection);
     else this.cameraDirection.lerp(this.desiredCameraDirection, 1 - Math.exp(-delta * 3)).normalize();
     let index = 0;
     const si = this.character === 'si';
-    const petHeight = engine.onBridge ? bridgePoint(-engine.pet.z, engine.bridgeOffset).y : 0;
+    const petHeight = 0;
     const bounds = [[engine.x, hover + engine.height, engine.z, si ? 1.8 : .95, 3, si ? 3.5 : 1.1]];
     if (!close) bounds.push([engine.pet.x, hover + petHeight + .1, engine.pet.z, 1.1, 2.5, 1.1]);
     for (const [x, y, z, w, h, d] of bounds) {
@@ -338,6 +385,27 @@ export class RideStage extends RaftStage {
     camera.position.y += Math.cos(this.time * 71) * engine.hit ** 2 * .07;
     camera.lookAt(this.look);
     camera.setViewOffset(rect.width, rect.height, 0, (bottom - top) / 2, rect.width, rect.height);
+    camera.updateProjectionMatrix(); this.firstFrame = false;
+  }
+
+  frameDrivingCamera(engine, delta = 0) {
+    const camera = this.scene.camera, rect = this.scene.renderer.domElement.getBoundingClientRect();
+    const landscape = rect.width > rect.height;
+    const pace = Math.max(0, Math.min(1, (engine.speed - zhuangRace.introSpeed) / (zhuangRace.flightSpeed - zhuangRace.introSpeed)));
+    camera.fov = 48 + pace * 10;
+    const slope = (this.center(engine.progress + 15) - this.center(engine.progress - 5)) / 20;
+    // Always behind the road's forward tangent. No cut, no 180-degree orbit
+    // at takeover: world +X projects right in every phase and every bend.
+    this.desiredCameraDirection.set(-slope, 0, 1).normalize();
+    if (this.firstFrame || !delta) this.cameraDirection.copy(this.desiredCameraDirection);
+    else this.cameraDirection.lerp(this.desiredCameraDirection, 1 - Math.exp(-delta * 5)).normalize();
+    this.look.set(engine.x + (engine.pet.x - engine.x) * .5, engine.height + 1.3, engine.z + 2);
+    const distance = landscape ? 14 : 17.5;
+    camera.position.copy(this.look).addScaledVector(this.cameraDirection, distance);
+    camera.position.y += landscape ? 7.5 : 8;
+    camera.lookAt(this.look);
+    camera.clearViewOffset();
+    camera.setViewOffset(rect.width, rect.height, 0, landscape ? 10 : 5, rect.width, rect.height);
     camera.updateProjectionMatrix(); this.firstFrame = false;
   }
 

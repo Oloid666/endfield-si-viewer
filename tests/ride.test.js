@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Box3, Group, Vector3 } from 'three';
+import { Box3, Group, PerspectiveCamera, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RideEngine } from '../src/game/RideEngine.js';
 import { SeatedRider } from '../src/game/SeatedRider.js';
-import { rideConfig } from '../src/config/rideConfig.js';
-import { bridgePoint, zhuangRace } from '../src/game/ZhuangRaceStory.js';
+import { rideConfig, zhuangRideConfig } from '../src/config/rideConfig.js';
+import { zhuangRace } from '../src/game/ZhuangRaceStory.js';
+import { RideStage } from '../src/game/RideStage.js';
 
 const advance = (e, seconds, input = {}, fps = 60) => {
   for (let i = 0; i < seconds * fps; i++) e.update(1 / fps, input);
@@ -99,63 +100,129 @@ test('900 metre course covers all sectors, finishes without input and bounds a h
 
 const zhuangEngine = () => { const e = new RideEngine(); e.setCharacter('zhuang'); e.start(); return e; };
 
-test('Zhuang starts reluctantly behind Dragon Bubble, reads the sponsor, then actually exchanges the lead', () => {
-  const e = new RideEngine({ ...rideConfig, obstacles: [] }); e.setCharacter('zhuang'); e.start();
-  assert(e.pet.z < e.z); assert(!e.useGas());
-  advance(e, 3.9); assert.equal(e.storyPhase, 'drag'); assert(e.speed < 13);
-  advance(e, .2); assert.equal(e.storyPhase, 'sponsor'); assert(!e.useGas());
-  advance(e, 3.5); assert(e.speed < 7);
-  advance(e, 1.4); assert.equal(e.storyPhase, 'takeover'); assert(e.pet.x > e.x + 3);
-  advance(e, 1.2); assert.equal(e.storyPhase, 'race'); assert(e.pet.z > e.z); assert(e.speed > 23);
+test('Dragon Bubble is playable for 22 seconds before a straight-road sponsor beat and a two-second lead exchange', () => {
+  const e = zhuangEngine(); assert(e.pet.z < e.z); assert(!e.useGas());
+  advance(e, .5, { steer: -1 }); assert(e.offset < -.2, 'intro accepts steering');
+  e.start(); advance(e, 21.9); assert.equal(e.storyPhase, 'drag'); assert.equal(e.speed, zhuangRace.introSpeed);
+  advance(e, .2); assert.equal(e.storyPhase, 'sponsor'); assert(!e.useGas()); assert(e.speed > 13);
+  advance(e, 3.9); assert.equal(e.storyPhase, 'takeover'); assert(e.pet.x > e.x + 2.5);
+  advance(e, 1.3); assert.equal(e.storyPhase, 'race'); assert(e.pet.z > e.z); assert(e.speed > 30);
   assert.deepEqual(e.takeEvents().filter(x => x.type === 'story').map(x => x.phase), ['drag', 'sponsor', 'takeover', 'race']);
 });
 
-test('Zhuang magic unlocks after taking control, costs charges, freezes while paused, and accelerates beyond normal cruise', () => {
-  const e = zhuangEngine(); assert.equal(e.gasLeft, 2); advance(e, 10.1);
+test('Zhuang magic unlocks after takeover, costs one charge, accelerates and freezes on pause', () => {
+  const e = zhuangEngine(); assert.equal(e.gasLeft, 2); advance(e, 27.1);
   assert(e.useGas()); assert.equal(e.gasLeft, 1); assert(!e.useGas());
-  advance(e, .8); assert(e.speed > 30); assert(e.speed <= zhuangRace.maxSpeed);
+  advance(e, .8); assert(e.speed > 40); assert(e.speed <= zhuangRace.maxSpeed);
   e.pause(); const snapshot = JSON.stringify(e); advance(e, 3); assert.equal(JSON.stringify(e), snapshot); assert(!e.useGas());
   e.resume(); advance(e, .1); assert(e.gasTime > 0);
 });
 
-test('story timing and exchanging positions freeze on pause, replay resets and switching to Si removes story rules', () => {
-  const e = zhuangEngine(); advance(e, 8.8); e.pause();
+test('holding direction drifts without a brake button and releasing direction earns an exit boost', () => {
+  const e = zhuangEngine(); advance(e, 28);
+  advance(e, .8, { steer: 1 }); assert(e.isDrifting); assert(e.charge > .28);
+  advance(e, .05); assert(e.boost > 0); assert(e.driftCount > 0);
+  e.start(); advance(e, 28); advance(e, .1, { steer: 1 }); advance(e, .1); assert.equal(e.boost, 0);
+});
+
+test('story and role exchange freeze on pause; replay resets the entire course and switching to Si restores its config', () => {
+  const e = zhuangEngine(); advance(e, 25.8); e.pause();
   const snapshot = JSON.stringify(e); advance(e, 10); assert.equal(JSON.stringify(e), snapshot);
   e.resume(); advance(e, 1.4); assert.equal(e.storyPhase, 'race');
   e.start(); assert.equal(e.storyPhase, 'drag'); assert.equal(e.progress, 0); assert(e.pet.z < e.z); assert.equal(e.gasLeft, 2);
-  e.setCharacter('si'); e.start(); assert.equal(e.storyPhase, null); assert(e.pet.z > e.z); assert.equal(e.gasLeft, 1); assert(e.useGas());
+  assert.equal(e.petBumps, 0); assert.equal(e.airHit.size, 0); assert.equal(e.height, 0);
+  e.setCharacter('si'); e.start(); assert.equal(e.config, rideConfig); assert.equal(e.storyPhase, null);
+  assert(e.pet.z > e.z); assert.equal(e.gasLeft, 1); assert(e.useGas());
 });
 
-test('Xiran shortcut is a raised straight path, captures entry offset without a jump, and bypasses ground hazards', () => {
-  const e = zhuangEngine(); advance(e, 10.1);
-  e.progress = zhuangRace.bridgeAt; e.offset = 5; const entryX = e.x;
-  e.update(1 / 120, { steer: 1, brake: true });
-  assert.equal(e.storyPhase, 'bridge'); assert(Math.abs(e.x - entryX) < .2); assert.equal(e.bridgeOffset, 5);
-  e.progress = 830; const expected = bridgePoint(830, 5);
-  assert.equal(e.x, expected.x); assert(e.height > 4); assert.equal(e.height, expected.y);
-  e.offset = 0; e.progress = 790; const bumps = e.bumps;
-  advance(e, .25, { steer: 1, brake: true }); assert.equal(e.bumps, bumps); assert(!e.braking);
-  advance(e, 5); assert.equal(e.state, 'won'); assert.equal(e.storyPhase, 'finish'); assert.equal(e.height, 0);
-  assert.equal(e.x, rideConfig.center(rideConfig.length));
+test('takeoff lifts smoothly, stays fast, accepts left/right control and ignores ground obstacles', () => {
+  const e = zhuangEngine(); advance(e, 28); e.progress = zhuangRace.flightAt;
+  advance(e, .1); assert.equal(e.storyPhase, 'flight'); assert(e.height < .1);
+  advance(e, 2.5); assert.equal(e.height, 6); assert(e.speed > 55);
+  const offset = e.offset; advance(e, .3, { steer: -1 }); assert(e.offset < offset);
+  advance(e, .8, { steer: 1 }); assert(e.velocity > 0);
+  e.pause(); const snapshot = JSON.stringify(e); advance(e, 2); assert.equal(JSON.stringify(e), snapshot);
+  e.start(); assert(!e.flying); assert.equal(e.height, 0); assert.equal(e.flightStarted, null);
 });
 
-test('Zhuang story completes with finite positions, a bounded tether and all beats in order without player input', () => {
+test('companion collisions are independent, debounced and more exaggerated in flight', () => {
+  const e = zhuangEngine(); advance(e, 28); const speed = e.speed, progress = e.progress;
+  assert(e.petBump('路邊路牌', 1)); assert.equal(e.speed, speed); assert.equal(e.progress, progress); assert.equal(e.bumps, 0);
+  assert.equal(e.petGroundBumps, 1); assert(!e.petBump('路牌', 1)); const groundSpin = e.pet.tumble;
+  advance(e, 1); e.progress = zhuangRace.flightAt; advance(e, .1); assert(e.flying);
+  assert(e.petBump('空中招牌', -1)); assert.equal(e.petAirBumps, 1);
+  assert.equal(e.pet.tumble - groundSpin, Math.PI * 4); assert(e.pet.hit > .9);
+  e.start(); assert.equal(e.petBumps, 0); assert.equal(e.pet.tumble, 0); assert.equal(e.groundHit.size, 0);
+});
+
+test('80-second course has distinct speed stages, visible collision contacts and frame-rate independent results', () => {
   const run = fps => {
-    const e = zhuangEngine(), beats = []; let highest = 0;
-    for (let i = 0; i < fps * 100 && e.state === 'playing'; i++) {
+    const e = zhuangEngine(), beats = []; let highest = 0, raceSpeed = 0, flightSpeed = 0;
+    for (let i = 0; i < fps * 130 && e.state === 'playing'; i++) {
       e.update(1 / fps); highest = Math.max(highest, e.height);
+      if (e.storyPhase === 'race') raceSpeed = Math.max(raceSpeed, e.speed);
+      if (e.flying) flightSpeed = Math.max(flightSpeed, e.speed);
       beats.push(...e.takeEvents().filter(x => x.type === 'story').map(x => x.phase));
-      assert(Number.isFinite(e.x + e.z + e.height));
-      assert(Math.hypot(e.pet.x - e.x, e.pet.z - e.z) <= rideConfig.maxRopeLength + 1e-8);
+      assert(Number.isFinite(e.x + e.z + e.height + e.pet.y));
+      assert(Math.hypot(e.pet.x - e.x, e.pet.z - e.z, e.pet.y - e.height) <= zhuangRideConfig.maxRopeLength + 1e-8);
       assert(e.speed <= zhuangRace.maxSpeed);
     }
-    assert.equal(e.state, 'won'); assert(highest > 4.4);
-    assert.deepEqual(beats, ['drag', 'sponsor', 'takeover', 'race', 'bridge']);
+    assert.equal(e.state, 'won'); assert.equal(highest, 6); assert(e.elapsed > 75 && e.elapsed < 95);
+    assert(raceSpeed > zhuangRace.introSpeed * 2.4); assert(flightSpeed > raceSpeed * 1.5);
+    assert(e.petGroundBumps > 0 && e.petAirBumps > 0);
+    assert(e.petAirBumps / (e.elapsed - e.flightStarted) > e.petGroundBumps / (e.flightStarted - zhuangRace.raceAt), 'flying has more frequent contacts');
+    assert(e.airHit.size > 0 && e.groundHit.size > 0, 'counts come from real scene hazards');
+    assert.deepEqual(beats, ['drag', 'sponsor', 'takeover', 'race', 'impatient', 'flight']);
     const snapshot = JSON.stringify(e); advance(e, 3); assert.equal(JSON.stringify(e), snapshot);
-    return [e.elapsed, e.progress, e.x];
+    return [e.elapsed, e.progress, e.x, e.petBumps];
   };
   const reference = run(120);
   for (const fps of [30, 60]) run(fps).forEach((value, i) => assert(Math.abs(value - reference[i]) < 1e-8));
+});
+
+test('countersteering the bends reduces guardrail impacts instead of automatically following every curve', () => {
+  const run = controlled => {
+    const e = zhuangEngine();
+    while (e.state === 'playing' && e.elapsed < 120) {
+      const steer = controlled ? Math.max(-1, Math.min(1, -e.offset * .12 - e.velocity * .13)) : 0;
+      e.update(1 / 120, { steer }); e.takeEvents();
+    }
+    return { bumps: e.bumps, time: e.elapsed };
+  };
+  const idle = run(false), driven = run(true);
+  assert(idle.bumps >= 4); assert(driven.bumps < idle.bumps); assert(driven.time < idle.time);
+});
+
+test('rear chase camera preserves screen left/right in both orientations, during takeover and along every bend', () => {
+  for (const [width, height] of [[390, 844], [844, 390]]) {
+    const camera = new PerspectiveCamera(48, width / height, .1, 150);
+    const stage = { scene: { camera, renderer: { domElement: { getBoundingClientRect: () => ({ width, height }) } } }, center: zhuangRideConfig.center, firstFrame: true, cameraDirection: new Vector3(), desiredCameraDirection: new Vector3(), look: new Vector3() };
+    const e = zhuangEngine();
+    for (const elapsed of [0, 24.9, 25.1, 26, 27.1, 70]) for (const progress of [0, 320, 500, 750, 1100, 1550, 1950, 2300]) {
+      e.elapsed = elapsed; e.progress = progress; e.pet.x = e.x; e.pet.z = e.z + 3;
+      RideStage.prototype.frameDrivingCamera.call(stage, e, 1 / 60); camera.updateMatrixWorld();
+      const left = new Vector3(e.x - 1, e.height + 1, e.z).project(camera);
+      const right = new Vector3(e.x + 1, e.height + 1, e.z).project(camera);
+      assert(left.x < right.x, 'left cannot reverse when the character changes');
+      assert(camera.position.z > e.z, 'camera always follows from behind');
+    }
+  }
+});
+
+test('a swinging dragon stays within the mobile view without reversing or pulling the chase camera far away', () => {
+  const camera = new PerspectiveCamera(48, 390 / 844, .1, 150);
+  const stage = { scene: { camera, renderer: { domElement: { getBoundingClientRect: () => ({ width: 390, height: 844 }) } } }, center: zhuangRideConfig.center, firstFrame: true, cameraDirection: new Vector3(), desiredCameraDirection: new Vector3(), look: new Vector3() };
+  const e = zhuangEngine();
+  while (e.state === 'playing') {
+    e.update(1 / 60, { steer: Math.sin(e.elapsed) });
+    RideStage.prototype.frameDrivingCamera.call(stage, e, 1 / 60); camera.updateMatrixWorld();
+    for (const side of [-1, 1]) {
+      const edge = new Vector3(e.pet.x + side * .8, e.pet.y + .5, e.pet.z).project(camera);
+      assert(Math.abs(edge.x) < .98, 'face and hit reaction remain on screen');
+    }
+    assert(camera.position.distanceTo(stage.look) < 20, 'bounded zoom keeps the rider readable');
+    e.takeEvents();
+  }
 });
 
 // Decode real supplied skeletons without images or a WebGL context. Materials
@@ -176,7 +243,7 @@ async function sourceModel(id) {
 }
 
 for (const id of ['si', 'zhuang']) test(`${id} source skeleton supports a seated pose and restores every changed joint`, async () => {
-  const model = await sourceModel(id), mount = new Group(), rig = new SeatedRider(model, mount, rideConfig.actorHeight);
+  const model = await sourceModel(id), mount = new Group(), rig = new SeatedRider(model, mount, id === 'zhuang' ? zhuangRideConfig.actorHeight : rideConfig.actorHeight);
   assert(rig.supported); assert(rig.attach()); rig.update(1, .6, .2);
   const pelvis = mount.worldToLocal(rig.nodes.pelvis.getWorldPosition(new Vector3()));
   assert(pelvis.length() < .03, 'pelvis stays aligned with seat');
