@@ -1,6 +1,7 @@
 import { BoxGeometry, BufferGeometry, CanvasTexture, CylinderGeometry, Float32BufferAttribute, Group, InstancedMesh, MeshBasicMaterial, PlaneGeometry, Quaternion, Shape, ShapeGeometry, TorusGeometry, Vector3 } from 'three';
 import { RaftStage } from './RaftStage.js';
 import { SeatedRider } from './SeatedRider.js';
+import { RideOpponent } from './RideOpponent.js';
 import { rideConfig, rideProfiles, zhuangRideConfig } from '../config/rideConfig.js';
 import { buildCompanion, buildMiniDijiang } from './RideProps.js';
 import { takeoverBlend, zhuangRace } from './ZhuangRaceStory.js';
@@ -57,6 +58,7 @@ export class RideStage extends RaftStage {
     this.buildEffects();
     this.buildStoryProps();
     this.buildDragonHazards();
+    this.opponent = this.config.airHazards ? new RideOpponent(this) : null;
   }
 
   buildStoryProps() {
@@ -76,7 +78,7 @@ export class RideStage extends RaftStage {
     ctx.strokeStyle = '#dfce88'; ctx.lineWidth = 12; ctx.strokeRect(6, 6, 500, 180);
     ctx.fillStyle = '#efe6b9'; ctx.textAlign = 'center'; ctx.font = 'bold 46px sans-serif'; ctx.fillText('冠軍神祕獎品', 256, 78);
     ctx.font = 'bold 35px sans-serif'; ctx.fillText('贊助：管理員', 256, 145);
-    this.sponsorBoard = this.mesh(this.own(new PlaneGeometry(5, 1.875)), this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(canvas)) })), this.root, [this.center(320) + 6, 3.2, -320]);
+    this.sponsorBoard = this.mesh(this.own(new PlaneGeometry(5, 1.875)), this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(canvas)) })), this.root, [this.center(105) + 6, 3.2, -105]);
     this.sponsorBoard.visible = false;
   }
 
@@ -110,11 +112,19 @@ export class RideStage extends RaftStage {
     ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(512, 128); ctx.moveTo(512, 0); ctx.lineTo(0, 128); ctx.stroke();
     ctx.fillStyle = '#e8d391cc'; ctx.font = 'bold 80px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', 256, 93);
     const material = this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(canvas)), transparent: true, depthWrite: false }));
+    const airTags = new Map();
     for (const item of this.config.airHazards) {
       const root = new Group(); root.position.set(this.center(item.s) + item.offset, item.height, -item.s); this.root.add(root);
       this.mesh(this.own(new PlaneGeometry(item.width, item.tall)), material, root);
       this.mesh(box, dark, root, [0, item.tall / 2, 0], [item.width, .16, .18]);
       for (const side of [-1, 1]) this.mesh(box, gold, root, [side * item.width * .46, -item.tall * .4, 0], [.12, item.tall * 1.5, .12]);
+      if (!airTags.has(item.name)) {
+        const tagCanvas = document.createElement('canvas'); tagCanvas.width = 320; tagCanvas.height = 64;
+        const tag = tagCanvas.getContext('2d'); tag.fillStyle = '#213c32'; tag.fillRect(0, 0, 320, 64);
+        tag.fillStyle = '#e8d391'; tag.font = 'bold 40px sans-serif'; tag.textAlign = 'center'; tag.fillText(item.name, 160, 47);
+        airTags.set(item.name, this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(tagCanvas)) })));
+      }
+      this.mesh(this.own(new PlaneGeometry(2.6, .52)), airTags.get(item.name), root, [0, item.tall / 2 + .2, .1]);
       this.airSigns.push(root);
     }
     for (const item of this.config.petHazards) {
@@ -122,6 +132,24 @@ export class RideStage extends RaftStage {
       this.mesh(box, dark, root, [0, -.2, 0], [.18, 1.4, .18]);
       const sign = this.mesh(box, gold, root, [0, .4, 0], [1.2, 1.2, .18]); sign.rotation.z = Math.PI / 4;
       this.mesh(box, dark, root, [0, .4, .12], [.2, .65, .08]);
+      sign.visible = false;
+      const paper = this.material(0xe6dec4), ink = this.material(0x244738);
+      if (item.name === '加班打卡機') {
+        this.mesh(box, dark, root, [0, .25, 0], [1.2, 1.45, .7]);
+        this.mesh(box, gold, root, [0, .48, .37], [.75, .38, .05]);
+        this.mesh(box, ink, root, [0, .06, .38], [.65, .08, .05]);
+      } else if (item.name === '待辦事項') {
+        for (let n = 0; n < 5; n++) this.mesh(box, paper, root, [(n % 2 - .5) * .18, -.2 + n * .19, 0], [1.5, .14, .9]);
+      } else if (item.name === '會議邀請' || item.name === '休假申請') {
+        this.mesh(box, item.name === '會議邀請' ? paper : gold, root, [0, .25, 0], [1.6, 1.15, .45]);
+        this.mesh(box, ink, root, [.35, .9, 0], [.6, .18, .45]);
+      } else {
+        sign.visible = true;
+      }
+      const tagCanvas = document.createElement('canvas'); tagCanvas.width = 384; tagCanvas.height = 96;
+      const tag = tagCanvas.getContext('2d'); tag.fillStyle = '#203c32'; tag.fillRect(0, 0, 384, 96);
+      tag.fillStyle = '#f0dfa6'; tag.font = 'bold 58px sans-serif'; tag.textAlign = 'center'; tag.fillText(item.name, 192, 70);
+      this.mesh(this.own(new PlaneGeometry(1.8, .45)), this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(tagCanvas)) })), root, [0, 1.18, .49]);
       this.roadSigns.push(root);
     }
   }
@@ -147,6 +175,12 @@ export class RideStage extends RaftStage {
     for (const obstacle of c.obstacles) {
       const x = this.center(obstacle.s) + obstacle.offset;
       barriers.push({ p: [x, .6, -obstacle.s], s: [obstacle.radius * 1.7, 1.2, .7] });
+      if (obstacle.name) {
+        const canvas = document.createElement('canvas'); canvas.width = 320; canvas.height = 80;
+        const ctx = canvas.getContext('2d'); ctx.fillStyle = '#253e33'; ctx.fillRect(0, 0, 320, 80);
+        ctx.fillStyle = '#f0dfa8'; ctx.font = 'bold 48px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(obstacle.name, 160, 58);
+        this.mesh(this.own(new PlaneGeometry(1.8, .45)), this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(canvas)) })), this.root, [x, 1.35, -obstacle.s + .4]);
+      }
       for (const side of [-1, 0, 1]) stripes.push({ p: [x + side * .45, .63, -obstacle.s + .36], s: [.2, 1.05, .025], r: [0, 0, -.45] });
     }
     this.instances(box, this.material(0xe4bc66), barriers);
@@ -157,8 +191,22 @@ export class RideStage extends RaftStage {
     const mint = this.material(0xa9d5b3, { emissive: 0x52765a, emissiveIntensity: .3 });
     const dark = this.material(0x253e37), amber = this.material(0xefd390);
     const pickupRing = this.own(new TorusGeometry(.65, .04, 5, 20));
+    let refillMaterial;
+    if (c.airHazards) {
+      const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 64;
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#267ba9'; ctx.fillRect(0, 0, 128, 64);
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 48px sans-serif'; ctx.fillText('＋1', 64, 50);
+      refillMaterial = this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(canvas)) }));
+    }
+    const blue = this.material(0x73d4f0, { emissive: 0x288bb5, emissiveIntensity: .7 });
     this.pickupMeshes = c.pickups.map(item => {
       const root = new Group(); root.position.set(this.center(item.s) + item.offset, 1.1, -item.s);
+      if (refillMaterial) {
+        root.userData.cube = this.mesh(box, blue, root, [0, 0, 0], [.65, .75, .65]);
+        this.mesh(pickupRing, blue, root);
+        root.userData.label = this.mesh(this.own(new PlaneGeometry(1.05, .525)), refillMaterial, root, [0, .72, 0]);
+        this.root.add(root); return root;
+      }
       this.mesh(tank, mint, root); this.mesh(cap, dark, root, [0, .42, 0]);
       this.mesh(pickupRing, amber, root);
       this.mesh(box, amber, root, [0, 0, .235], [.22, .32, .025]);
@@ -185,7 +233,7 @@ export class RideStage extends RaftStage {
     const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
     const context = canvas.getContext('2d'), gradient = context.createRadialGradient(32, 32, 3, 32, 32, 30);
     gradient.addColorStop(0, '#eef1d9dd'); gradient.addColorStop(.5, '#bdd2b9bb'); gradient.addColorStop(1, '#8fba9b00'); context.fillStyle = gradient; context.fillRect(0, 0, 64, 64);
-    const smokeMaterial = this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(canvas)), transparent: true, depthWrite: false, opacity: .7 }));
+    const smokeMaterial = this.own(new MeshBasicMaterial({ map: this.own(new CanvasTexture(canvas)), transparent: true, depthWrite: false, opacity: this.config.airHazards ? .3 : .7 }));
     this.smoke = new InstancedMesh(this.own(new PlaneGeometry(1, 1)), smokeMaterial, 40);
     this.smoke.frustumCulled = false; this.root.add(this.smoke);
     const star = new Shape();
@@ -198,6 +246,8 @@ export class RideStage extends RaftStage {
     this.puffs = Array.from({ length: 40 }, () => ({ life: 0 }));
     this.starParticles = Array.from({ length: 8 }, () => ({ life: 0 }));
     this.trackParticles = Array.from({ length: 40 }, () => ({ life: 0 }));
+    this.rush = new InstancedMesh(this.own(new BoxGeometry(1, 1, 1)), this.own(new MeshBasicMaterial({ color: 0xffedac, transparent: true, opacity: .85, depthWrite: false })), 16);
+    this.rush.frustumCulled = false; this.rush.visible = false; this.root.add(this.rush);
     this.emitter = new Vector3(); this.resetEffects();
   }
 
@@ -205,7 +255,7 @@ export class RideStage extends RaftStage {
     this.petSpin = this.lastFXPetBumps = 0; this.signHitAt = [];
     this.puffIndex = this.trackIndex = this.emitClock = this.trackClock = this.lastFXBumps = 0;
     for (const item of [...this.puffs, ...this.starParticles, ...this.trackParticles]) item.life = 0;
-    for (const mesh of [this.smoke, this.stars, this.tracks]) mesh.visible = false;
+    for (const mesh of [this.smoke, this.stars, this.tracks, this.rush]) mesh.visible = false;
   }
 
   puff(x, y, z, size, speed) {
@@ -229,9 +279,10 @@ export class RideStage extends RaftStage {
     const jet = engine.gasTime > 0 || engine.boost > 0 || engine.flying;
     if (jet) {
       this.emitClock += dt;
-      while (this.emitClock > .04) {
-        this.emitClock -= .04; this.emitter.set(this.puffIndex % 2 ? .8 : -.8, .35, this.character === 'si' ? 2.8 : .6); this.raft.localToWorld(this.emitter);
-        this.puff(this.emitter.x, this.emitter.y, this.emitter.z, engine.gasTime ? 2.2 : 1.2, engine.speed);
+      const interval = engine.isZhuang ? .085 : .04;
+      while (this.emitClock > interval) {
+        this.emitClock -= interval; this.emitter.set(this.puffIndex % 2 ? .8 : -.8, .35, this.character === 'si' ? 2.8 : .6); this.raft.localToWorld(this.emitter);
+        this.puff(this.emitter.x, this.emitter.y, this.emitter.z, engine.isZhuang ? engine.gasTime ? .85 : .5 : engine.gasTime ? 2.2 : 1.2, engine.speed);
       }
     }
     if (engine.isDrifting && !engine.flying) {
@@ -241,6 +292,14 @@ export class RideStage extends RaftStage {
         for (const side of [-1, 1]) { this.emitter.set(side * .65, 0, .25); this.raft.localToWorld(this.emitter); Object.assign(this.trackParticles[this.trackIndex++ % 40], { x: this.emitter.x, z: this.emitter.z, angle: this.raft.rotation.y, life: 1 }); }
       }
     }
+    this.rush.visible = engine.isZhuang && (engine.gasTime > 0 || engine.boost > 0 || (engine.flying && engine.elapsed - engine.flightStarted < 1));
+    if (this.rush.visible) for (let i = 0; i < 16; i++) {
+      const phase = (this.time * 2.5 + i / 16) % 1;
+      this.emitter.set((i % 2 ? 1 : -1) * (.65 + phase * .7), .15 + (i % 4) * .18, .6 + phase * 6); this.raft.localToWorld(this.emitter);
+      this.temp.position.copy(this.emitter); this.temp.quaternion.copy(this.raft.quaternion);
+      this.temp.scale.set(.035, .025, .5 + phase * 2); this.temp.updateMatrix(); this.rush.setMatrixAt(i, this.temp.matrix);
+    }
+    if (this.rush.visible) this.rush.instanceMatrix.needsUpdate = true;
     this.trackMaterial.color.set([0x93d8d1, 0x93d8d1, 0xf1b66d, 0xc3a1f4][engine.driftTier]);
     this.smoke.visible = this.stars.visible = this.tracks.visible = true;
     this.puffs.forEach((p, i) => {
@@ -312,7 +371,7 @@ export class RideStage extends RaftStage {
     // Base stage writes the rope after this hook; height correction follows in update.
     this.ropeHeight = si ? 1.2 : .35;
     this.warning.rotation.z = Math.sin(time * 16) * engine.hit * .5;
-    this.pickupMeshes.forEach((mesh, i) => { mesh.visible = !engine.pickups.has(i); mesh.position.y = 1.1 + (this.config.pickups[i].s >= zhuangRace.flightAt && !si ? zhuangRace.flightHeight : 0) + Math.sin(time * 3 + i) * .14; mesh.rotation.y = time * 1.5; });
+    this.pickupMeshes.forEach((mesh, i) => { mesh.visible = !engine.pickups.has(i); mesh.position.y = 1.1 + (this.config.pickups[i].s >= zhuangRace.flightAt && !si ? zhuangRace.flightHeight : 0) + Math.sin(time * 3 + i) * .14; mesh.rotation.y = si ? time * 1.5 : 0; if (mesh.userData.cube) mesh.userData.cube.rotation.y = time * 1.5; if (mesh.userData.label) mesh.userData.label.quaternion.copy(this.scene.camera.quaternion); });
     const prop = si ? this.inkProp : this.dragonProp;
     prop.face.material.map = prop.maps[engine.hit > .1 || engine.gasTime > 0 || (!si && engine.pet.hit > .1) ? 1 : 0];
     this.petBody.scale.set(.85 + engine.hit * .2, .85 - engine.hit * .25, .85 + engine.hit * .2);
@@ -343,6 +402,7 @@ export class RideStage extends RaftStage {
     }
     this.updateStoryProps(engine);
     this.updateEffects(engine, delta);
+    this.opponent?.update(engine);
   }
 
   frameCamera(engine, delta = 0) {
@@ -392,7 +452,8 @@ export class RideStage extends RaftStage {
     const camera = this.scene.camera, rect = this.scene.renderer.domElement.getBoundingClientRect();
     const landscape = rect.width > rect.height;
     const pace = Math.max(0, Math.min(1, (engine.speed - zhuangRace.introSpeed) / (zhuangRace.flightSpeed - zhuangRace.introSpeed)));
-    camera.fov = 48 + pace * 10;
+    const fov = 48 + pace * 10 + (engine.gasTime > 0 ? 3 : 0);
+    camera.fov = this.firstFrame || !delta ? fov : camera.fov + (fov - camera.fov) * (1 - Math.exp(-delta * 6));
     const slope = (this.center(engine.progress + 15) - this.center(engine.progress - 5)) / 20;
     // Always behind the road's forward tangent. No cut, no 180-degree orbit
     // at takeover: world +X projects right in every phase and every bend.
@@ -408,6 +469,8 @@ export class RideStage extends RaftStage {
     camera.setViewOffset(rect.width, rect.height, 0, landscape ? 10 : 5, rect.width, rect.height);
     camera.updateProjectionMatrix(); this.firstFrame = false;
   }
+
+  dispose() { this.opponent?.dispose(); this.opponent = null; super.dispose(); }
 
   detach() {
     const active = this.active, fov = this.saved?.fov;

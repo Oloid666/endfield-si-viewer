@@ -12,6 +12,9 @@ export class RideEngine extends RaftEngine {
   setCharacter(character) { this.character = character === 'zhuang' ? 'zhuang' : 'si'; this.config = this.isZhuang ? zhuangRideConfig : this.baseConfig; this.reset(); }
   get isZhuang() { return this.character === 'zhuang'; }
   get flying() { return this.isZhuang && this.flightStarted !== null; }
+  get timeScale() { return this.isZhuang && this.takeoffPending ? zhuangRace.decisionScale : 1; }
+  get prizeRemaining() { return this.prizeDeadline === null ? null : Math.max(0, this.prizeDeadline - this.prizeClock); }
+  setOpponent(enabled) { this.rivalEnabled = !!enabled; this.rival = { enabled: this.isZhuang && !!enabled, progress: 0, speed: 14, offset: -3, clock: 0, finished: false, finishTime: null }; }
   get height() { return this.flying ? flightHeight(this.elapsed - this.flightStarted) : 0; }
 
 
@@ -27,7 +30,9 @@ export class RideEngine extends RaftEngine {
     this.sector = 0;
     this.topSpeed = this.speed;
     this.storyPhase = this.isZhuang ? 'drag' : null;
-    this.lastStoryPhase = null; this.flightStarted = null; this.steerHeld = this.lastSteer = 0;
+    this.lastStoryPhase = null; this.flightStarted = null; this.takeoffPending = false;
+    this.prizeClock = 0; this.prizeDeadline = null; this.outcome = null;
+    this.setOpponent(this.rivalEnabled); this.steerHeld = this.lastSteer = 0;
     this.petBumps = this.petGroundBumps = this.petAirBumps = 0;
     Object.assign(this.pet, { y: 1.2, angle: 0, angularVelocity: 0, hit: 0, cooldown: 0, tumble: 0 });
     this.airHit = new Set(); this.groundHit = new Set();
@@ -39,7 +44,7 @@ export class RideEngine extends RaftEngine {
   takeEvents() { return this.events.splice(0); }
 
   useGas() {
-    if (this.isZhuang && this.elapsed < zhuangRace.raceAt) return false;
+    if (this.isZhuang && (this.elapsed < zhuangRace.raceAt || this.takeoffPending)) return false;
     if (this.state !== 'playing' || !this.gasLeft || this.gasTime > 0) return false;
     this.gasLeft--; this.gasUsed++;
     this.gasTime = this.config.gas.seconds;
@@ -47,6 +52,30 @@ export class RideEngine extends RaftEngine {
     this.topSpeed = Math.max(this.topSpeed, this.speed);
     this.emit('gas');
     return true;
+  }
+
+  requestTakeoff() {
+    if (!this.isZhuang || this.state !== 'playing' || !this.takeoffPending || this.flying) return false;
+    this.flightStarted = this.elapsed; this.takeoffPending = false;
+    this.storyPhase = this.lastStoryPhase = 'flight';
+    this.hitStop = this.cooldown = this.hit = 0;
+    this.speed = Math.max(this.speed, zhuangRace.flightSpeed);
+    this.topSpeed = Math.max(this.topSpeed, this.speed);
+    this.emit('story', { phase: 'flight' });
+    return true;
+  }
+
+  updateOpponent(dt) {
+    const r = this.rival;
+    if (!r.enabled || r.finished) return;
+    r.clock += dt;
+    const target = this.elapsed < zhuangRace.raceAt ? 15 : 39.5 + Math.sin(r.clock * .7) * 1.5;
+    const bend = Math.min(.15, Math.abs(this.curvature(r.progress)) * 10);
+    r.speed += (target * (1 - bend) - r.speed) * (1 - Math.exp(-dt * 2));
+    const lane = Math.abs(r.progress - this.progress) < 12 && this.offset < 0 ? 3 : -3;
+    r.offset += (lane - r.offset) * (1 - Math.exp(-dt * 2));
+    r.progress = Math.min(this.config.length, r.progress + r.speed * dt);
+    if (r.progress >= this.config.length) { r.finished = true; r.finishTime = this.prizeClock; }
   }
 
   curvature(s) {
@@ -59,11 +88,10 @@ export class RideEngine extends RaftEngine {
     const c = this.config, d = c.driving;
     this.elapsed += dt;
     if (this.isZhuang) {
-      this.storyPhase = zhuangPhase(this.elapsed, this.progress);
+      this.storyPhase = zhuangPhase(this.elapsed, this.progress, false, this.flying);
       if (this.storyPhase !== this.lastStoryPhase) {
-        if (this.storyPhase === 'flight') {
-          this.flightStarted = this.elapsed;
-          this.hitStop = this.cooldown = this.hit = 0;
+        if (this.storyPhase === 'takeoff') {
+          this.takeoffPending = true; this.prizeDeadline = this.prizeClock + zhuangRace.prizeSeconds;
         }
         this.lastStoryPhase = this.storyPhase;
         this.emit('story', { phase: this.storyPhase });
@@ -72,6 +100,8 @@ export class RideEngine extends RaftEngine {
       this.lastSteer = steer;
       brake = this.steerHeld >= zhuangRace.steeringHold && this.elapsed >= zhuangRace.raceAt;
     }
+    dt *= this.timeScale;
+    this.prizeClock += dt;
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.hit = Math.max(0, this.hit - dt * 2.2);
     this.boost = Math.max(0, this.boost - dt);
@@ -119,11 +149,11 @@ export class RideEngine extends RaftEngine {
       this.offset = clamp(this.offset, -c.edge, c.edge);
       if (this.flying) this.velocity *= -.2; else this.bump('護欄', Math.sign(this.offset));
     }
-    this.progress = Math.min(c.length, this.progress + this.speed * dt);
+    this.progress = Math.min(this.takeoffPending ? zhuangRace.flightAt + 40 : c.length, this.progress + this.speed * dt);
     for (const obstacle of this.flying ? [] : c.obstacles) {
       if (Math.abs(this.progress - obstacle.s) < 1.8 && Math.abs(this.offset - obstacle.offset) < obstacle.radius + .9) {
         const direction = this.offset >= obstacle.offset ? 1 : -1;
-        if (this.bump('路障', -direction)) this.velocity = direction * 3;
+        if (this.bump(obstacle.name || '路障', -direction)) this.velocity = direction * 3;
         this.offset = clamp(this.offset + direction * dt * 4, -c.edge, c.edge);
       }
     }
@@ -141,9 +171,13 @@ export class RideEngine extends RaftEngine {
     c.sectors.forEach((item, i) => { if (this.progress >= item.s) sector = i; });
     if (sector !== this.sector) { this.sector = sector; this.emit('sector', { sector }); }
     this.updatePet(dt, brake);
+    this.updateOpponent(dt);
     if (this.progress >= c.length) {
       this.state = 'won'; this.isDrifting = false;
-      if (this.isZhuang) this.storyPhase = 'finish';
+      if (this.isZhuang) {
+        this.storyPhase = 'finish';
+        this.outcome = this.rival.enabled && this.rival.finished ? 'rival' : this.prizeRemaining === 0 ? 'late' : 'player';
+      }
       this.emit('finish');
     }
   }
@@ -171,11 +205,11 @@ export class RideEngine extends RaftEngine {
       const lateral = p.x - this.config.center(-p.z);
       if (!this.flying && Math.abs(lateral) > this.config.roadHalfWidth - .7) this.petBump('護欄', Math.sign(lateral));
       if (!this.flying) for (const [index, item] of this.config.petHazards.entries()) {
-        if (!this.groundHit.has(index) && Math.hypot(p.x - this.config.center(item.s) - item.offset, p.z + item.s) < item.radius + .8 && this.petBump('路邊路牌', Math.sign(item.offset))) this.groundHit.add(index);
+        if (!this.groundHit.has(index) && Math.hypot(p.x - this.config.center(item.s) - item.offset, p.z + item.s) < item.radius + .8 && this.petBump(item.name, Math.sign(item.offset))) this.groundHit.add(index);
       }
       if (this.flying) for (const [index, item] of this.config.airHazards.entries()) {
         const hit = Math.abs(p.x - this.config.center(item.s) - item.offset) < item.width / 2 + .75 && Math.abs(p.z + item.s) < .95 && Math.abs(p.y - item.height) < item.tall / 2 + .75;
-        if (!this.airHit.has(index) && hit && this.petBump('空中招牌', Math.sign(item.offset))) this.airHit.add(index);
+        if (!this.airHit.has(index) && hit && this.petBump(item.name, Math.sign(item.offset))) this.airHit.add(index);
       }
     }
     p.vx = (p.x - oldX) / dt; p.vz = (p.z - oldZ) / dt;
