@@ -24,12 +24,19 @@ export const encoreScripts = [
 
 export class RaceEncore {
   constructor(random=Math.random){this.random=random;this.recent=[];this.reset();}
-  reset(){this.clock=0;this.next=0;this.active=false;this.current=null;this.gesture=0;}
+  reset(){this.clock=0;this.next=0;this.active=false;this.current=null;this.gesture=0;this.replies=[];}
   start(){this.reset();this.active=true;}
+  reply(actor,text){
+    if(!this.active||!text)return;
+    // Keep the current skit intact. At most two different actors wait to reply.
+    this.replies=this.replies.filter(reply=>reply.id!==`tap:${actor}`);
+    this.replies.push({id:`tap:${actor}`,text});this.replies=this.replies.slice(-2);
+  }
   update(delta,engine,character){
     if(!this.active)return null;
     this.clock+=Math.min(Math.max(delta,0),.12);
     if(this.clock<this.next)return null;
+    if(this.current&&this.replies.length){this.current=this.replies.shift();this.gesture=2;return this.current.text;}
     const pool=encoreScripts.filter(s=>(!s.character||s.character===character)&&(!s.duel||engine.rival.enabled)&&(!s.when||s.when(engine)));
     // Open with a performance-specific gag. Subsequent skits can use all themes.
     const contextual=pool.filter(s=>s.when);

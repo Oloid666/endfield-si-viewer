@@ -4,6 +4,7 @@ import { rideConfig, rideProfiles } from '../config/rideConfig.js';
 import { zhuangBeats, zhuangRace, openingDialogue, siOpeningDialogue, impactLines, rivalLines, gapLines } from './ZhuangRaceStory.js';
 import { RaceDialogue } from '../ui/RaceDialogue.js';
 import { RaceEncore } from './RaceEncore.js';
+import { EncorePlay } from './EncorePlay.js';
 
 // Reuse held-touch controls and pause lifecycle; keep a distinct DOM / menu entry.
 export class RideGame extends RaftGame {
@@ -41,16 +42,41 @@ export class RideGame extends RaftGame {
       if (button.id === 'ride-pause') this.pause();
       if (button.id === 'ride-exit') hooks.exit();
       if (button.id === 'ride-gas') this.activatePower();
+      if (button.dataset.encore) this.reactToEncore(button.dataset.encore);
     };
     root.addEventListener('click', this.onClick);
     this.onGasKey = event => { if (this.active && event.code === 'KeyE' && !event.repeat && !/INPUT|SELECT|TEXTAREA/.test(event.target.tagName)) { event.preventDefault(); this.activatePower(); } };
     document.addEventListener('keydown', this.onGasKey);
     this.raceDialogue=new RaceDialogue(this.$('#ride-line'));
     this.encore=new RaceEncore();
+    this.encorePlay=new EncorePlay();
+    this.$('#ride-card .actions').insertAdjacentHTML('afterend','<p id="ride-encore-tip" hidden>點畫面上的角色逗一下，牠們還沒下班。</p>');
     const settings=document.createElement('details');settings.id='ride-settings';settings.open=true;
     const summary=document.createElement('summary');summary.textContent='賽事設定與操作';settings.append(summary);
     for(const node of [this.$('.ride-picker'),this.$('#ride-rival-option'),this.$('#ride-rival-status'),this.$('#ride-card .hint'),this.$('#ride-card > details')])settings.append(node);
     this.$('#ride-card').append(settings);
+    settings.insertAdjacentHTML('beforeend','<div id="ride-encore-buttons" role="group" aria-label="結算角色互動" hidden><button data-encore="zhuang">逗莊芳宜</button><button data-encore="dragon">逗龍泡泡</button><button data-encore="si">逗祀</button><button data-encore="ink">逗小聰明</button></div>');
+    this.encoreCanvas=stage.scene.renderer.domElement;
+    this.onEncoreDown=event=>{
+      this.encoreTap=null;
+      if(!this.active||this.engine.state!=='won'||event.isPrimary===false||event.button>0)return;
+      const actor=this.stage.pickEncoreActor(this.engine,event.clientX,event.clientY);
+      if(actor)this.encoreTap={actor,id:event.pointerId,x:event.clientX,y:event.clientY,time:event.timeStamp};
+    };
+    this.onEncoreMove=event=>{const tap=this.encoreTap;if(tap&&event.pointerId===tap.id&&Math.hypot(event.clientX-tap.x,event.clientY-tap.y)>12)this.encoreTap=null;};
+    this.onEncoreUp=event=>{
+      const tap=this.encoreTap;this.encoreTap=null;
+      if(!tap||tap.id!==event.pointerId||event.timeStamp-tap.time>700)return;
+      if(this.stage.pickEncoreActor(this.engine,event.clientX,event.clientY)===tap.actor)this.reactToEncore(tap.actor);
+    };
+    this.onEncoreCancel=()=>{this.encoreTap=null;};
+    for(const [type,handler] of [['pointerdown',this.onEncoreDown],['pointermove',this.onEncoreMove],['pointerup',this.onEncoreUp],['pointercancel',this.onEncoreCancel]])this.encoreCanvas.addEventListener(type,handler);
+  }
+
+  reactToEncore(actor){
+    if(!this.active||this.engine.state!=='won')return;
+    const text=this.encorePlay.tap(actor,this.stage.getEncoreCast(this.engine));
+    if(text)this.encore.reply(actor,text);
   }
 
   get profile() { return rideProfiles[this.character]; }
@@ -61,7 +87,7 @@ export class RideGame extends RaftGame {
     super.start(restart);
     if (!this.ready) return;
     if (!resume) {
-      this.encore.reset();this.$('#ride-settings').open=true;this.stage.encoreReady=false;
+      this.encore.reset();this.encorePlay.reset();this.encoreTap=null;this.$('#ride-settings').open=true;this.stage.encoreReady=false;
       this.stage.lastTime = this.stage.lastSpins = this.stage.lastBumps = this.stage.seatSpin = 0;
       this.stage.shotUntil = 0;
       this.stage.resetEffects();
@@ -118,8 +144,11 @@ export class RideGame extends RaftGame {
       this.$('#ride-result').textContent = `${e.elapsed.toFixed(1)} 秒 · 最高 ${(e.topSpeed * 3.6).toFixed(0)} km/h\n龍泡泡：地上撞 ${e.petGroundBumps} 次／天上撞 ${e.petAirBumps} 次\n${ending}\n${e.rival.enabled ? '祀 AI 對戰' : '單人故事模式'}`;
     }
     if (this.rivalLoading) { this.$('#ride-start').disabled = true; if (this.ready) this.$('#ride-start').textContent = '祀正在上車…'; }
-    if(e.state==='won'&&!this.endingStarted){this.endingStarted=true;this.encore.start();this.stage.encoreReady=false;this.$('#ride-settings').open=false;this.$('#ride-comic').hidden=true;this.$('#ride-prize').hidden=true;}
+    if(e.state==='won'&&!this.endingStarted){this.endingStarted=true;this.encore.start();this.encorePlay.reset();this.encoreTap=null;this.stage.encoreReady=false;this.$('#ride-settings').open=false;this.$('#ride-comic').hidden=true;this.$('#ride-prize').hidden=true;}
     if(e.state==='won'){for(const key of ['boost','gas','impact','slow','refill'])this.root.dataset[key]='false';this.root.dataset.pace='calm';}
+    this.$('#ride-encore-tip').hidden=this.$('#ride-encore-buttons').hidden=e.state!=='won';
+    const cast=this.stage.getEncoreCast(e);
+    for(const button of this.root.querySelectorAll('[data-encore]'))button.hidden=!cast.includes(button.dataset.encore);
     if(e.state!=='won')this.$('#ride-settings').open=true;
     for (const button of this.root.querySelectorAll('[data-rider]')) button.setAttribute('aria-pressed', String(button.dataset.rider === this.character));
   }
@@ -155,7 +184,8 @@ export class RideGame extends RaftGame {
       const clock=e.elapsed+this.encore.clock;this.raceDialogue.update(clock);
       this.$('#ride-line').hidden=false;
       const part=this.raceDialogue.parts?.[this.raceDialogue.index];
-      this.stage.updateEncore(e,delta,{...part,gesture:this.encore.gesture,talking:clock<this.messageUntil});
+      this.encorePlay.update(delta,this.stage.getEncoreCast(e));
+      this.stage.updateEncore(e,delta,{...part,gesture:this.encore.gesture,talking:clock<this.messageUntil,play:this.encorePlay});
       return;
     }
     e.update(delta, this.input); this.stage.update(e, delta * e.timeScale);
@@ -269,8 +299,12 @@ export class RideGame extends RaftGame {
   }
   leave() {
     ++this.opponentRequest; this.rivalLoading = false;
+    this.encoreTap=null;this.encore.reset();this.encorePlay.reset();
     this.stage.opponent?.setEnabled(false); super.leave();
   }
 
-  dispose() { this.$('#ride-rival').removeEventListener('change', this.onOpponentChange); document.removeEventListener('keydown', this.onGasKey); super.dispose(); }
+  dispose() {
+    for(const [type,handler] of [['pointerdown',this.onEncoreDown],['pointermove',this.onEncoreMove],['pointerup',this.onEncoreUp],['pointercancel',this.onEncoreCancel]])this.encoreCanvas.removeEventListener(type,handler);
+    this.$('#ride-rival').removeEventListener('change', this.onOpponentChange); document.removeEventListener('keydown', this.onGasKey); super.dispose();
+  }
 }
