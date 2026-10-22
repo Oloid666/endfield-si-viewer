@@ -290,6 +290,8 @@ test('Si plans corners and finite bursts; passing reactions have cooldowns and f
   assert.equal(r.reaction, 'passed'); assert(r.reactionUntil > r.clock);
   r.progress = e.progress + 10; e.update(1 / 120);
   assert(!e.takeEvents().some(event => ['pass', 'near'].includes(event.action)), 'nearby crossings cannot spam taunts');
+  assert.equal(r.reaction, 'pass', 'visual response still plays during subtitle cooldown');
+  assert(r.reactionUntil > r.clock);
   r.nextQuip = 0; r.lead = -1; e.update(1 / 120);
   assert(e.takeEvents().some(event => event.action === 'pass'));
   e.pause(); const snapshot = JSON.stringify(r); advance(e, 5); assert.equal(JSON.stringify(r), snapshot);
