@@ -293,3 +293,17 @@ header { top: calc(74px + env(safe-area-inset-top)); } #character-name { font-we
 @media(max-height:500px) { #ride-prize { top:calc(108px + env(safe-area-inset-top));right:16px;width:180px; } }
 @media(prefers-reduced-motion:reduce) { #ride-root #ride-gas,#ride-root .ride-vfx { animation:none; } }
 #ride-root[data-rider="zhuang"][data-refill="true"] #ride-gas { animation:none; }
+
+/* Pre-rendered four-person / five-mood atlas; portraits occupy one small corner. */
+#ride-root #ride-line { overflow:visible; }
+.race-portrait { position:absolute;left:0;bottom:calc(100% + 8px);width:68px;height:68px;background-size:500% 400%;border-radius:10px;border:1px solid #e1e5ba99;background-color:#243b35f5;box-shadow:0 3px 10px #10221f55;pointer-events:none; }
+.race-portrait small { position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:1px 6px;background:#243d33;border-radius:5px;color:#f3edc2;font-size:10px; }
+#ride-line[data-mood="panic"] .race-portrait { animation:portrait-pop .35s ease-out; }
+#ride-line[data-mood="angry"] .race-portrait { border-color:#efb08b; }
+#ride-line[data-mood="dead"] .race-portrait { filter:saturate(.5); }
+@keyframes portrait-pop { 0% { transform:scale(.8) rotate(-5deg); } 55% { transform:scale(1.12) rotate(4deg); } 100% { transform:scale(1) rotate(0); } }
+@media(max-height:500px) { .race-portrait { width:52px;height:52px;left:auto;right:0; } }
+@media(prefers-reduced-motion:reduce) { #ride-line .race-portrait { animation:none; } }
+#ride-root[data-state="won"] .raft-controls { visibility:hidden; }
+#ride-root[data-state="won"] #ride-line { bottom:calc(20px + env(safe-area-inset-bottom)); }
+@media(min-height:501px) { #ride-root[data-state="won"] .raft-card { max-height:calc(100dvh - 280px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); } }

@@ -8,6 +8,8 @@ import { SeatedRider } from '../src/game/SeatedRider.js';
 import { rideConfig, zhuangRideConfig, rivalRideConfig } from '../src/config/rideConfig.js';
 import { zhuangRace, openingDialogue, impactLines } from '../src/game/ZhuangRaceStory.js';
 import { RideStage } from '../src/game/RideStage.js';
+import { ZhuangIdleController } from '../src/viewer/ZhuangIdleController.js';
+import { dialogueParts } from '../src/ui/RaceDialogue.js';
 
 const advance = (e, seconds, input = {}, fps = 60) => {
   for (let i = 0; i < seconds * fps; i++) e.update(1 / fps, input);
@@ -283,6 +285,7 @@ test('serious Si beats idling and careless boosts, but clean button steering, pi
 
 test('Si plans corners and finite bursts; passing reactions have cooldowns and freeze/reset with play', () => {
   const e = zhuangEngine(); e.setOpponent(true); advance(e, 13.1);
+  assert(e.rival.windup > 0); assert.equal(e.rival.burst,0); advance(e,.8);
   assert(e.rival.burst > 0); assert(e.rival.bursts === 1);
   e.takeEvents(); const r = e.rival;
   r.progress = e.progress - 10; r.lead = 1; r.nextQuip = 0;
@@ -377,4 +380,65 @@ test('Si side-saddle bends both legs to one side, reaches the brush and can wave
   rig.restore();
   for (const { bone, p, q, s } of rig.bones) { assert(bone.position.equals(p)); assert(bone.quaternion.equals(q)); assert(bone.scale.equals(s)); }
   model.gltf.scene.traverse(node => { node.geometry?.dispose(); for (const material of Array.isArray(node.material) ? node.material : [node.material]) material?.dispose(); });
+});
+
+test('jump boards launch automatically, trailer follows late, and a missed board recovers with one penalty', () => {
+  for(const character of ['si','zhuang']){
+    const setup=offset=>{const e=new RideEngine();e.setCharacter(character);e.start();const j=e.config.jumps[0];e.progress=j.s-1;e.elapsed=e.prizeClock=13;e.speed=j.minSpeed+5;e.offset=offset;return e;};
+    const e=setup(0),j=e.config.jumps[0];
+    advance(e,.12);assert(e.jump,'board starts jump');assert(e.height>0);assert(e.jumpHeight(.25)===0,'pet stays behind initially');
+    let peak=0;for(let i=0;i<4*120;i++){e.update(1/120);peak=Math.max(peak,e.height);e.takeEvents();}
+    assert(peak>2);assert.equal(e.jumpWins,1);assert.equal(e.jumpFails,0);assert.equal(e.jump,null);
+    const missed=setup(j.width/2+.7);advance(missed,4);assert.equal(missed.jumpFails,1);assert.equal(missed.jumpWins,0);assert.equal(missed.state,'playing');assert(missed.progress>j.gapEnd);assert(missed.petGrudge>0);
+    missed.start();assert.equal(missed.jumpWins,0);assert.equal(missed.jumpFails,0);assert.equal(missed.jumpTried.size,0);
+  }
+});
+
+test('trailer remembers impacts, pauses with the race, forgives clean driving and resets on replay', () => {
+  const e=zhuangEngine();
+  for(let i=0;i<3;i++){assert(e.petBump('測試柱',1));advance(e,.8);}
+  assert.equal(e.petGrudge,3);assert.equal(e.petMood,'angry');assert(e.takeEvents().some(x=>x.type==='grudge'));
+  e.pause();const snapshot=JSON.stringify(e);advance(e,12);assert.equal(JSON.stringify(e),snapshot);
+  e.resume();advance(e,9);assert(e.petGrudge<3);assert(e.takeEvents().some(x=>x.type==='grudge-calm'));
+  e.start();assert.equal(e.petGrudge,0);assert.equal(e.petMood,'calm');
+});
+
+test('finish-straight dialogue reflects the actual gap and does not repeat the same band every frame',()=>{
+  for(const [gap,band] of [[50,'behind'],[-50,'ahead'],[0,'close']]){
+    const e=zhuangEngine();e.setOpponent(true);e.elapsed=e.prizeClock=40;e.flightStarted=38;e.progress=2250;e.rival.progress=e.progress+gap;e.rival.clock=40;
+    e.update(1/120);const event=e.takeEvents().find(x=>x.type==='gap');assert.equal(event?.band,band);
+    advance(e,.5);assert(!e.takeEvents().some(x=>x.type==='gap'));
+    e.start();assert.equal(e.lastGapBand,null);
+  }
+});
+
+
+test('dialogue splits speakers into individual portraits and resolves comic moods',()=>{
+  const parts=dialogueParts('莊：妳先鬆手。祀：妳先收筆。');
+  assert.deepEqual(parts.map(x=>x.speaker),['zhuang','si']);
+  assert.equal(dialogueParts('龍泡泡：等等！！')[0].mood,'panic');
+  assert.equal(dialogueParts('小聰明：三次了！')[0].speaker,'ink');
+  assert.equal(dialogueParts('廣播：冠軍獎品！','zhuang')[0].speaker,'system');
+  assert.equal(dialogueParts('祀：領墨水。','si','dead')[0].mood,'dead');
+});
+
+test('Zhuang display uses the supplied rig, blinks, has a dragon, pauses and releases only its own props',async()=>{
+  const model=await sourceModel('zhuang'),scene=new Group(),bounds=new Box3().setFromObject(model.group,true);
+  const previous=globalThis.document;
+  const context=new Proxy({createLinearGradient:()=>({addColorStop(){}})},{get:(o,k)=>o[k]||(()=>{})});
+  globalThis.document={createElement:()=>({width:256,height:256,getContext:()=>context})};
+  let idle;
+  try{
+    idle=new ZhuangIdleController(model.gltf,bounds,scene);assert(idle.supported);assert.equal(idle.eyelids.length,12);
+    idle.setCompanionVisible(true);assert(idle.display.visible);const initial=idle.head.bone.quaternion.clone();
+    for(let i=0;i<10*120;i++)idle.update(1/120,new Vector3(0,0,4));
+    assert(!idle.head.bone.quaternion.equals(initial));assert.equal(idle.dragon.kind,'dragon');
+    for(const p of Object.values(idle.poses))assert(p.bone.quaternion.toArray().every(Number.isFinite));
+    idle.setBlink(1);assert(idle.eyelids.some(p=>!p.bone.position.equals(p.rest)));
+    idle.setPlaying(false);const t=idle.time,q=idle.head.bone.quaternion.clone();idle.update(2);assert.equal(idle.time,t);assert(idle.head.bone.quaternion.equals(q));
+    let released=0;for(const r of idle.resources)r.addEventListener('dispose',()=>released++);const count=idle.resources.size;
+    idle.dispose();assert.equal(released,count);assert.equal(scene.children.length,0);assert.equal(idle.resources.size,0);
+    for(const p of Object.values(idle.poses))assert(p.bone.quaternion.equals(p.q));
+  }finally{globalThis.document=previous;}
+  model.gltf.scene.traverse(node=>{node.geometry?.dispose();for(const m of Array.isArray(node.material)?node.material:[node.material])m?.dispose();});
 });

@@ -66,13 +66,21 @@ export class SeatedRider {
     if (pose?.determined) this.rotate('spine', [1, 0, 0], -.18 * pose.determined);
     this.rotate('head', [0, 1, 0], (this.sideSaddle ? -.35 + this.lookBack * .65 : -.3) + Math.sin(time * .8) * .12);
     this.rotate('head', [0, 0, 1], lean * .12 + hit * .18);
+    if(!this.sideSaddle&&pose){
+      const alert=pose.story==='sponsor'||pose.story==='takeover';
+      this.rotate('head',[1,0,0],alert?-.14:pose.story==='takeoff'?-.22:0);
+      this.rotate('head',[0,1,0],pose.story==='drag'?Math.sin(time*.6)*.18:pose.grudge>=3?-.12:0);
+    }
     for (const [index, side] of ['L', 'R'].entries()) {
       this.rotate(`thigh${side}`, [1, 0, 0], -1.45 + Math.sin(time * 5 + index) * .035);
       this.rotate(`knee${side}`, [1, 0, 0], 1.45);
       // Hands reach toward the armrest / brush; elbows point outwards.
       const sign = index ? -1 : 1;
       if (this.sideSaddle) this.target.set(sign * .25, .15 + (side === 'R' ? this.wave * (.75 + Math.sin(time * 14) * .08) : 0), -.25 - (side === 'R' ? this.wave * .15 : 0));
-      else this.target.set(sign * .35, pose?.magic && side === 'R' ? .95 : .3, pose?.magic && side === 'R' ? -.85 : -.57);
+      else {
+        const folded=pose?.story==='drag',magic=pose?.magic&&side==='R';
+        this.target.set(folded?-sign*.19:sign*.35,magic ? .95 : folded ? .6 : .3,magic?-.85:folded?-.3:-.57);
+      }
       this.mount.localToWorld(this.target);
       this.pole.set(sign * 1.1, .1, -.1); this.mount.localToWorld(this.pole);
       this.solvers[side].solve(this.target, this.pole);

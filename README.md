@@ -14,6 +14,16 @@
 
 `RhythmEngine` 是獨立的絕對時鐘判定器；`RhythmGame` 管 UI、原生 Web Audio 與既有 render loop 的更新；`GameStage` 重用祀的舞步和實際手腕抓握。沒有額外 Renderer、RAF、物理引擎、排行榜服務或遊戲框架。
 
+## 展示陪伴、四人頭像與跳板
+
+[莊芳宜與龍泡泡展示](https://oloid666.github.io/endfield-si-viewer/#zhuang)／[莊芳宜挑戰祀](https://oloid666.github.io/endfield-si-viewer/?rider=zhuang&ai=1#ride)／[祀領免費墨水](https://oloid666.github.io/endfield-si-viewer/?rider=si#ride)。
+
+- 莊的展示區加入眨眼、呼吸、袖口動作與身旁龍泡泡，支援暫停待機；切換遊戲會隱藏陪伴，返回還原。
+- 四位角色各五種對話頭像，預渲染成一張 800×640 圖集；浮誇眉眼、驚嘆號與汗滴由本站繪製。頭像衍生自上述 CC BY 4.0 人物模型的本站渲染，以及本站自建跟班模型，原 GLB 不變。廣播不顯示角色頭像，多人對話依序切換。
+- 小聰明重新調整輪廓與曲面紙面，祀主控／AI 的毛筆尾端都有牠；龍泡泡與小聰明會記仇，平穩駕駛才消氣。
+- 黃色跳板自動起跳，對準與速度影響過坑；失誤扣速救回，跟班延遲彈射，不增加操作按鈕。
+- 祀從「只領墨水」變認真；AI 收筆加速前有抬手／亮墨環預兆，終點前依實際差距接話。詳細範圍見 [本輪改版紀錄](docs/CAST-RACE-CHANGES.md)。
+
 ## 御筆飛行／辦公椅－試作
 
 [祀側坐水墨毛筆](https://oloid666.github.io/endfield-si-viewer/?rider=si#ride)／[莊芳宜坐辦公椅](https://oloid666.github.io/endfield-si-viewer/?rider=zhuang#ride)，或遊戲區 → **御筆飛行／辦公椅－試作**。與竹筏是獨立入口；開始／暫停面板可切換兩種坐騎，換角色會重新開局。

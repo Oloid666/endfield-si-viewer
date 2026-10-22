@@ -17,10 +17,16 @@ export class RideEngine extends RaftEngine {
   setOpponent(enabled) {
     this.rivalEnabled = !!enabled;
     this.rival = { enabled: this.isZhuang && !!enabled, progress: 0, speed: rivalRideConfig.introSpeed, offset: -rivalRideConfig.lane, clock: 0,
-      finished: false, finishTime: null, burst: 0, nextBurst: zhuangRace.raceAt + 1, bursts: 0, cornering: false,
+      finished: false, finishTime: null, burst: 0, windup:0, queued:false, nextBurst: zhuangRace.raceAt + 1, bursts: 0, cornering: false,
       lead: 0, nextQuip: zhuangRace.raceAt + 5, reactionUntil: 0, reaction: null, near: false };
   }
-  get height() { return this.flying ? flightHeight(this.elapsed - this.flightStarted) : 0; }
+  get height() { const rescue=this.rescueStarted===null?0:Math.sin(Math.PI*clamp((this.prizeClock-this.rescueStarted)/.85,0,1))*.65;return (this.flying ? flightHeight(this.elapsed - this.flightStarted) : 0) + this.jumpHeight()-rescue; }
+  jumpHeight(delay=0) {
+    if(!this.jump)return 0;
+    const t=(this.prizeClock-this.jump.started-delay)/this.jump.seconds;
+    return t>0&&t<1?4*this.jump.height*t*(1-t):0;
+  }
+  get petMood() { return this.pet.hit>.25?'panic':this.petGrudge>=5?'dead':this.petGrudge>=3?'angry':'calm'; }
 
 
   reset() {
@@ -41,6 +47,9 @@ export class RideEngine extends RaftEngine {
     this.petBumps = this.petGroundBumps = this.petAirBumps = 0;
     Object.assign(this.pet, { y: 1.2, angle: 0, angularVelocity: 0, hit: 0, cooldown: 0, tumble: 0 });
     this.airHit = new Set(); this.groundHit = new Set();
+    this.jump=null;this.jumpTried=new Set();this.jumpResolved=new Set();this.jumpWins=this.jumpFails=0;this.jumpWarned=new Set();
+    this.rescueStarted=null;
+    this.petGrudge=0;this.grudgeDecayAt=0;this.lastGapBand=null;this.nextGapLineAt=0;
     if (this.isZhuang) { this.speed = this.topSpeed = zhuangRace.introSpeed; this.gasLeft = 2; this.pet.z = -this.config.ropeLength; }
   }
 
@@ -75,12 +84,14 @@ export class RideEngine extends RaftEngine {
     if (!r.enabled || r.finished) return;
     r.clock += dt;
     r.burst = Math.max(0, r.burst - dt);
+    r.windup=Math.max(0,r.windup-dt);
+    if(r.queued&&!r.windup){r.queued=false;r.burst=c.burstSeconds;r.bursts++;if(Math.abs(r.progress-this.progress)<80)this.emit('rival',{action:'burst'});}
     const bend = Math.max(...[0, 15, 30].map(ahead => Math.abs(this.curvature(r.progress + ahead))));
     r.cornering = bend > c.straightCurvature;
     const racing = r.clock >= zhuangRace.raceAt;
-    if (racing && !r.cornering && r.clock >= r.nextBurst && !r.burst) {
-      r.burst = c.burstSeconds; r.nextBurst = r.clock + c.burstCooldown; r.bursts++;
-      if (Math.abs(r.progress - this.progress) < 80) this.emit('rival', { action: 'burst' });
+    if (racing && !r.cornering && r.clock >= r.nextBurst && !r.burst && !r.queued) {
+      r.windup=c.windupSeconds;r.queued=true;r.nextBurst=r.clock+c.burstCooldown;
+      if (Math.abs(r.progress - this.progress) < 80) this.emit('rival', { action: 'windup' });
     }
     const target = racing ? Math.min(c.maxSpeed, c.cruiseSpeed * (1 - Math.min(c.cornerLoss, bend * 12)) + (r.burst ? c.burstSpeed : 0)) : c.introSpeed;
     r.speed += (target - r.speed) * (1 - Math.exp(-dt * c.acceleration));
@@ -132,6 +143,7 @@ export class RideEngine extends RaftEngine {
     }
     dt *= this.timeScale;
     this.prizeClock += dt;
+    if(this.petGrudge&&this.prizeClock>=this.grudgeDecayAt){this.petGrudge--;this.grudgeDecayAt=this.prizeClock+5;if(this.petGrudge===2)this.emit('grudge-calm');}
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.hit = Math.max(0, this.hit - dt * 2.2);
     this.boost = Math.max(0, this.boost - dt);
@@ -179,8 +191,10 @@ export class RideEngine extends RaftEngine {
       this.offset = clamp(this.offset, -c.edge, c.edge);
       if (this.flying) this.velocity *= -.2; else this.bump('護欄', Math.sign(this.offset));
     }
+    const previousProgress=this.progress;
     this.progress = Math.min(this.takeoffPending ? zhuangRace.flightAt + 40 : c.length, this.progress + this.speed * dt);
-    for (const obstacle of this.flying ? [] : c.obstacles) {
+    this.updateJump(previousProgress);
+    for (const obstacle of this.height>.5 ? [] : c.obstacles) {
       if (Math.abs(this.progress - obstacle.s) < 1.8 && Math.abs(this.offset - obstacle.offset) < obstacle.radius + .9) {
         const direction = this.offset >= obstacle.offset ? 1 : -1;
         if (this.bump(obstacle.name || '路障', -direction)) this.velocity = direction * 3;
@@ -202,6 +216,10 @@ export class RideEngine extends RaftEngine {
     if (sector !== this.sector) { this.sector = sector; this.emit('sector', { sector }); }
     this.updatePet(dt, brake);
     this.updateOpponent(dt);
+    if(this.rival.enabled&&this.progress>=c.length-400&&this.prizeClock>=this.nextGapLineAt){
+      const gap=this.rival.progress-this.progress,band=Math.abs(gap)<25?'close':gap>0?'behind':'ahead';
+      if(band!==this.lastGapBand){this.lastGapBand=band;this.nextGapLineAt=this.prizeClock+8;this.emit('gap',{band});}
+    }
     if (this.progress >= c.length) {
       this.state = 'won'; this.isDrifting = false;
       if (this.isZhuang) {
@@ -212,8 +230,30 @@ export class RideEngine extends RaftEngine {
     }
   }
 
+  updateJump(previousProgress) {
+    (this.config.jumps||[]).forEach((j,i)=>{
+      if(!this.jumpWarned.has(i)&&this.progress>=j.s-65&&this.progress<j.s){this.jumpWarned.add(i);this.emit('jump-warning');}
+      if(!this.jumpTried.has(i)&&previousProgress<=j.s&&this.progress>=j.s){
+        this.jumpTried.add(i);
+        if(Math.abs(this.offset)<=j.width/2&&this.speed>=j.minSpeed){this.jump={...j,index:i,started:this.prizeClock};this.emit('jump');}
+      }
+      if(this.jumpResolved.has(i)||this.progress<j.gapStart)return;
+      const inGap=this.progress<=j.gapEnd;
+      if((inGap&&this.height>.4)||(!inGap&&Math.abs(this.offset)<=j.landingWidth)){
+        if(!inGap){this.jumpResolved.add(i);this.jumpWins++;this.emit('jump-land');}return;
+      }
+      this.jumpResolved.add(i);this.jumpFails++;this.speed=Math.max(8,this.speed*.65);this.boost=this.gasTime=this.charge=0;
+      this.jump=null;this.rescueStarted=this.prizeClock;
+      this.petBumps++;this.rememberPetHit();this.pet.hit=1;this.pet.tumble+=Math.PI*2;
+      this.emit('jump-fail');
+    });
+    if(this.jump&&this.prizeClock-this.jump.started>this.jump.seconds+.4)this.jump=null;
+  }
+
+  rememberPetHit(){this.petGrudge=Math.min(5,this.petGrudge+1);this.grudgeDecayAt=this.prizeClock+9;if(this.petGrudge===3)this.emit('grudge');}
+
   updatePet(dt, brake) {
-    if (!this.isZhuang) { super.updatePet(dt, brake); return; }
+    if (!this.isZhuang) { super.updatePet(dt, brake);this.pet.y=1.2+this.jumpHeight(.25);this.pet.hit=Math.max(0,this.pet.hit-dt*2);return; }
     const p = this.pet, oldX = p.x, oldZ = p.z;
     p.hit = Math.max(0, p.hit - dt * (this.flying ? 1.5 : 2));
     p.cooldown = Math.max(0, p.cooldown - dt);
@@ -231,7 +271,7 @@ export class RideEngine extends RaftEngine {
       const rope = this.flying ? zhuangRace.petAirRope : zhuangRace.petGroundRope;
       p.x = this.x + Math.sin(p.angle) * rope;
       p.z = this.z + Math.cos(p.angle) * rope;
-      p.y = this.height + 1.2 + (this.flying ? Math.sin(this.elapsed * 6) * .95 : 0);
+      p.y = this.height - this.jumpHeight() + this.jumpHeight(.25) + 1.2 + (this.flying ? Math.sin(this.elapsed * 6) * .95 : 0);
       const lateral = p.x - this.config.center(-p.z);
       if (!this.flying && Math.abs(lateral) > this.config.roadHalfWidth - .7) this.petBump('護欄', Math.sign(lateral));
       if (!this.flying) for (const [index, item] of this.config.petHazards.entries()) {
@@ -252,6 +292,7 @@ export class RideEngine extends RaftEngine {
     p.angularVelocity -= direction * (this.flying ? 4 : 2.5);
     p.tumble += this.flying ? Math.PI * 4 : Math.PI * 2;
     this.petBumps++;
+    this.rememberPetHit();
     if (this.flying) this.petAirBumps++; else this.petGroundBumps++;
     this.emit('pet-hit', { kind, air: this.flying });
     return true;
@@ -264,6 +305,7 @@ export class RideEngine extends RaftEngine {
     this.velocity *= -.45;
     this.boost = this.gasTime = this.charge = 0;
     this.pet.vx -= direction * 4; this.pet.vz += 3;
+    if(!this.isZhuang){this.petBumps++;this.petGroundBumps++;this.pet.hit=1;this.rememberPetHit();}
     this.emit('collision', { kind });
     return true;
   }
