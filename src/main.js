@@ -283,7 +283,7 @@ try {
     zone=next;if(!['hub','game','climb','escape','raft','ride'].includes(next))lastViewerZone=next;
     document.querySelector('#app').dataset.zone=next;
     document.querySelector('#game-hub').hidden=next!=='hub';
-    history.replaceState(null,'',next==='ride'?`?rider=${ride.character}#ride`:`#${next}`);
+    history.replaceState(null,'',next==='ride'?`?rider=${ride.character}&ai=${ride.opponentEnabled?1:0}#ride`:`#${next}`);
     for(const button of document.querySelectorAll('.zone-nav button[data-zone]'))button.setAttribute('aria-pressed',String(button.dataset.zone===next||(['game','climb','escape','raft','ride'].includes(next)&&button.dataset.zone==='hub')));
     document.querySelector('#face-panel').hidden=next==='zhuang';document.querySelector('#action-section').hidden=next==='zhuang';
     camera.controls.enabled=!['hub','game','climb','escape','raft','ride'].includes(next);setPanelExpanded(false);cameraMode=['hub','game','climb','escape','raft','ride'].includes(next)?next:'full';

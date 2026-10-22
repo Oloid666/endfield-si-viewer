@@ -39,7 +39,7 @@ export const rideConfig = {
 };
 
 // Gentle first turns, a straight sponsor zone, then alternating larger bends.
-const zhuangTurns = [[0, 0], [120, 0], [300, 30], [420, 30], [630, -35], [830, 38], [1050, -40], [1280, 36], [1500, -38], [1750, 24], [1950, 24], [2150, -30], [2370, 36], [2600, 0]];
+const zhuangTurns = [[0, 0], [240, 0], [420, 30], [630, -35], [830, 38], [1050, -40], [1280, 36], [1500, -38], [1750, 24], [1950, 24], [2150, -30], [2370, 36], [2600, 0]];
 export function zhuangCenter(s) {
   if (s <= 0) return 0;
   for (let i = 1; i < zhuangTurns.length; i++) {
@@ -56,12 +56,12 @@ export const zhuangRideConfig = {
   roadHalfWidth: 7.5, riverHalfWidth: 10, edge: 6,
   ropeLength: 2.8, maxRopeLength: 6.4,
   driving: { ...rideConfig.driving, turn: .3, driftTurn: .42, grip: 6.5, driftGrip: 2.8, curveForce: 2, acceleration: 1.8 },
-  obstacles: [{ s: 740, offset: 5.4, radius: .7 }, { s: 1450, offset: -5.4, radius: .7 }],
-  stamps: Array.from({ length: 20 }, (_, i) => ({ s: 80 + i * 115, offset: [0, -2, 2, 0][i % 4] })),
+  obstacles: [{ s: 740, offset: 5.4, radius: .7, name: '臨時會議' }, { s: 1450, offset: -5.4, radius: .7, name: '緊急簽核' }],
+  stamps: [],
   pickups: [480, 790, 1120, 1440, 1770, 2080, 2370].map(s => ({ s, offset: 0 })),
   sectors: [{ s: 0, name: '龍泡泡帶薪兜風', caption: '' }, { s: 420, name: '莊芳宜搶獎品', caption: '' }, { s: 1900, name: '禁止飛行辦公', caption: '' }],
-  petHazards: [580, 820, 1050, 1280, 1500, 1720].map((s, i) => ({ s, offset: i % 2 ? 4.2 : -4.2, radius: .8 })),
-  airHazards: [1985, 2080, 2175, 2270, 2365, 2460, 2545].flatMap(s => [-1, 1].map(side => ({ s, offset: side * 5.5, height: 6.8, width: 8, tall: 3 }))),
+  petHazards: [580, 820, 1050, 1280, 1500, 1720].map((s, i) => ({ s, offset: i % 2 ? 4.2 : -4.2, radius: .8, name: ['加班打卡機', '待辦事項', '會議邀請', '休假申請', '績效考核', '禁止內卷'][i] })),
+  airHazards: [1985, 2080, 2175, 2270, 2365, 2460, 2545].flatMap(s => [-1, 1].map(side => ({ s, offset: side * 5.5, height: 6.8, width: 8, tall: 3, name: side < 0 ? '反內卷結界' : '空中考勤' }))),
 };
 
 export const rideProfiles = {
@@ -81,8 +81,8 @@ export const rideProfiles = {
     name: '莊芳宜', vehicle: '失控辦公椅', companion: '龍泡泡', hover: 0,
     source: 'https://sketchfab.com/3d-models/zhuang-fangyi-arknights-endfield-51d669eb7ef94cb49aeeaf2d9541d9de',
     title: '本來只想讓她下班。',
-    intro: '龍泡泡看莊芳宜加班太久，拉著辦公椅來賽道。直到她聽見：冠軍獎品由管理員贊助……約 80 秒可操作短劇：龍泡泡兜風、莊暴走，最後辦公椅直接起飛。',
-    start: '龍泡泡：啵！（下班！）　莊芳宜：我的文件還沒——',
+    intro: '龍泡泡拉阿莊出門休息。結果休息的是她，受罪的是牠。管理員贊助的獎品，到底誰先拿到？',
+    start: '龍泡泡：阿莊，加班太久了！',
     boost: '工業集成系統：椅動辦公，效率翻倍。',
     bump: '莊芳宜：椅子留下。　系統：人已經出去了。',
     spin: '系統：座椅已轉向，工作態度保持不變。',

@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RideEngine } from '../src/game/RideEngine.js';
 import { SeatedRider } from '../src/game/SeatedRider.js';
 import { rideConfig, zhuangRideConfig } from '../src/config/rideConfig.js';
-import { zhuangRace } from '../src/game/ZhuangRaceStory.js';
+import { zhuangRace, openingDialogue, impactLines } from '../src/game/ZhuangRaceStory.js';
 import { RideStage } from '../src/game/RideStage.js';
 
 const advance = (e, seconds, input = {}, fps = 60) => {
@@ -100,10 +100,10 @@ test('900 metre course covers all sectors, finishes without input and bounds a h
 
 const zhuangEngine = () => { const e = new RideEngine(); e.setCharacter('zhuang'); e.start(); return e; };
 
-test('Dragon Bubble is playable for 22 seconds before a straight-road sponsor beat and a two-second lead exchange', () => {
+test('opening story immediately speaks, gives seven seconds of driving, then reveals the prize on a straight', () => {
   const e = zhuangEngine(); assert(e.pet.z < e.z); assert(!e.useGas());
   advance(e, .5, { steer: -1 }); assert(e.offset < -.2, 'intro accepts steering');
-  e.start(); advance(e, 21.9); assert.equal(e.storyPhase, 'drag'); assert.equal(e.speed, zhuangRace.introSpeed);
+  e.start(); advance(e, 6.9); assert.equal(e.storyPhase, 'drag'); assert.equal(e.speed, zhuangRace.introSpeed);
   advance(e, .2); assert.equal(e.storyPhase, 'sponsor'); assert(!e.useGas()); assert(e.speed > 13);
   advance(e, 3.9); assert.equal(e.storyPhase, 'takeover'); assert(e.pet.x > e.x + 2.5);
   advance(e, 1.3); assert.equal(e.storyPhase, 'race'); assert(e.pet.z > e.z); assert(e.speed > 30);
@@ -111,7 +111,7 @@ test('Dragon Bubble is playable for 22 seconds before a straight-road sponsor be
 });
 
 test('Zhuang magic unlocks after takeover, costs one charge, accelerates and freezes on pause', () => {
-  const e = zhuangEngine(); assert.equal(e.gasLeft, 2); advance(e, 27.1);
+  const e = zhuangEngine(); assert.equal(e.gasLeft, 2); advance(e, 12.1);
   assert(e.useGas()); assert.equal(e.gasLeft, 1); assert(!e.useGas());
   advance(e, .8); assert(e.speed > 40); assert(e.speed <= zhuangRace.maxSpeed);
   e.pause(); const snapshot = JSON.stringify(e); advance(e, 3); assert.equal(JSON.stringify(e), snapshot); assert(!e.useGas());
@@ -119,14 +119,14 @@ test('Zhuang magic unlocks after takeover, costs one charge, accelerates and fre
 });
 
 test('holding direction drifts without a brake button and releasing direction earns an exit boost', () => {
-  const e = zhuangEngine(); advance(e, 28);
+  const e = zhuangEngine(); advance(e, 13);
   advance(e, .8, { steer: 1 }); assert(e.isDrifting); assert(e.charge > .28);
   advance(e, .05); assert(e.boost > 0); assert(e.driftCount > 0);
-  e.start(); advance(e, 28); advance(e, .1, { steer: 1 }); advance(e, .1); assert.equal(e.boost, 0);
+  e.start(); advance(e, 13); advance(e, .1, { steer: 1 }); advance(e, .1); assert.equal(e.boost, 0);
 });
 
 test('story and role exchange freeze on pause; replay resets the entire course and switching to Si restores its config', () => {
-  const e = zhuangEngine(); advance(e, 25.8); e.pause();
+  const e = zhuangEngine(); advance(e, 10.8); e.pause();
   const snapshot = JSON.stringify(e); advance(e, 10); assert.equal(JSON.stringify(e), snapshot);
   e.resume(); advance(e, 1.4); assert.equal(e.storyPhase, 'race');
   e.start(); assert.equal(e.storyPhase, 'drag'); assert.equal(e.progress, 0); assert(e.pet.z < e.z); assert.equal(e.gasLeft, 2);
@@ -135,21 +135,25 @@ test('story and role exchange freeze on pause; replay resets the entire course a
   assert(e.pet.z > e.z); assert.equal(e.gasLeft, 1); assert(e.useGas());
 });
 
-test('takeoff lifts smoothly, stays fast, accepts left/right control and ignores ground obstacles', () => {
-  const e = zhuangEngine(); advance(e, 28); e.progress = zhuangRace.flightAt;
-  advance(e, .1); assert.equal(e.storyPhase, 'flight'); assert(e.height < .1);
+test('takeoff waits for the player in slow motion, works with no charges, then lifts and still accepts steering', () => {
+  const e = zhuangEngine(); advance(e, 13); e.progress = zhuangRace.flightAt;
+  advance(e, .1); assert.equal(e.storyPhase, 'takeoff'); assert(e.takeoffPending); assert(!e.flying); assert.equal(e.height, 0);
+  const p = e.progress, countdown = e.prizeRemaining; advance(e, 2);
+  assert(e.progress - p < 18, 'world advances at 18% speed');
+  assert(countdown - e.prizeRemaining < .4, 'prize countdown slows too');
+  e.gasLeft = 0; assert(e.requestTakeoff()); assert(!e.takeoffPending); assert(!e.requestTakeoff()); assert.equal(e.gasLeft, 0);
   advance(e, 2.5); assert.equal(e.height, 6); assert(e.speed > 55);
   const offset = e.offset; advance(e, .3, { steer: -1 }); assert(e.offset < offset);
   advance(e, .8, { steer: 1 }); assert(e.velocity > 0);
   e.pause(); const snapshot = JSON.stringify(e); advance(e, 2); assert.equal(JSON.stringify(e), snapshot);
-  e.start(); assert(!e.flying); assert.equal(e.height, 0); assert.equal(e.flightStarted, null);
+  e.start(); assert(!e.flying); assert.equal(e.height, 0); assert.equal(e.flightStarted, null); assert.equal(e.prizeDeadline, null);
 });
 
 test('companion collisions are independent, debounced and more exaggerated in flight', () => {
-  const e = zhuangEngine(); advance(e, 28); const speed = e.speed, progress = e.progress;
+  const e = zhuangEngine(); advance(e, 13); const speed = e.speed, progress = e.progress;
   assert(e.petBump('路邊路牌', 1)); assert.equal(e.speed, speed); assert.equal(e.progress, progress); assert.equal(e.bumps, 0);
   assert.equal(e.petGroundBumps, 1); assert(!e.petBump('路牌', 1)); const groundSpin = e.pet.tumble;
-  advance(e, 1); e.progress = zhuangRace.flightAt; advance(e, .1); assert(e.flying);
+  advance(e, 1); e.progress = zhuangRace.flightAt; advance(e, .1); e.requestTakeoff(); assert(e.flying);
   assert(e.petBump('空中招牌', -1)); assert.equal(e.petAirBumps, 1);
   assert.equal(e.pet.tumble - groundSpin, Math.PI * 4); assert(e.pet.hit > .9);
   e.start(); assert.equal(e.petBumps, 0); assert.equal(e.pet.tumble, 0); assert.equal(e.groundHit.size, 0);
@@ -159,6 +163,7 @@ test('80-second course has distinct speed stages, visible collision contacts and
   const run = fps => {
     const e = zhuangEngine(), beats = []; let highest = 0, raceSpeed = 0, flightSpeed = 0;
     for (let i = 0; i < fps * 130 && e.state === 'playing'; i++) {
+      if (e.takeoffPending) e.requestTakeoff();
       e.update(1 / fps); highest = Math.max(highest, e.height);
       if (e.storyPhase === 'race') raceSpeed = Math.max(raceSpeed, e.speed);
       if (e.flying) flightSpeed = Math.max(flightSpeed, e.speed);
@@ -167,12 +172,12 @@ test('80-second course has distinct speed stages, visible collision contacts and
       assert(Math.hypot(e.pet.x - e.x, e.pet.z - e.z, e.pet.y - e.height) <= zhuangRideConfig.maxRopeLength + 1e-8);
       assert(e.speed <= zhuangRace.maxSpeed);
     }
-    assert.equal(e.state, 'won'); assert.equal(highest, 6); assert(e.elapsed > 75 && e.elapsed < 95);
+    assert.equal(e.state, 'won'); assert.equal(highest, 6); assert(e.elapsed > 60 && e.elapsed < 90);
     assert(raceSpeed > zhuangRace.introSpeed * 2.4); assert(flightSpeed > raceSpeed * 1.5);
     assert(e.petGroundBumps > 0 && e.petAirBumps > 0);
     assert(e.petAirBumps / (e.elapsed - e.flightStarted) > e.petGroundBumps / (e.flightStarted - zhuangRace.raceAt), 'flying has more frequent contacts');
     assert(e.airHit.size > 0 && e.groundHit.size > 0, 'counts come from real scene hazards');
-    assert.deepEqual(beats, ['drag', 'sponsor', 'takeover', 'race', 'impatient', 'flight']);
+    assert.deepEqual(beats, ['drag', 'sponsor', 'takeover', 'race', 'impatient', 'takeoff', 'flight']);
     const snapshot = JSON.stringify(e); advance(e, 3); assert.equal(JSON.stringify(e), snapshot);
     return [e.elapsed, e.progress, e.x, e.petBumps];
   };
@@ -185,6 +190,7 @@ test('countersteering the bends reduces guardrail impacts instead of automatical
     const e = zhuangEngine();
     while (e.state === 'playing' && e.elapsed < 120) {
       const steer = controlled ? Math.max(-1, Math.min(1, -e.offset * .12 - e.velocity * .13)) : 0;
+      if (e.takeoffPending) e.requestTakeoff();
       e.update(1 / 120, { steer }); e.takeEvents();
     }
     return { bumps: e.bumps, time: e.elapsed };
@@ -214,6 +220,7 @@ test('a swinging dragon stays within the mobile view without reversing or pullin
   const stage = { scene: { camera, renderer: { domElement: { getBoundingClientRect: () => ({ width: 390, height: 844 }) } } }, center: zhuangRideConfig.center, firstFrame: true, cameraDirection: new Vector3(), desiredCameraDirection: new Vector3(), look: new Vector3() };
   const e = zhuangEngine();
   while (e.state === 'playing') {
+    if (e.takeoffPending) e.requestTakeoff();
     e.update(1 / 60, { steer: Math.sin(e.elapsed) });
     RideStage.prototype.frameDrivingCamera.call(stage, e, 1 / 60); camera.updateMatrixWorld();
     for (const side of [-1, 1]) {
@@ -223,6 +230,47 @@ test('a swinging dragon stays within the mobile view without reversing or pullin
     assert(camera.position.distanceTo(stage.look) < 20, 'bounded zoom keeps the rider readable');
     e.takeEvents();
   }
+});
+
+test('opening lines tell the story immediately, stay short, and collision objects have matching jokes', () => {
+  assert.equal(openingDialogue[0].at, 0); assert.match(openingDialogue[0].line, /阿莊/);
+  assert(openingDialogue.every(item => item.line.length < 27));
+  for (const item of [...zhuangRideConfig.obstacles, ...zhuangRideConfig.petHazards, ...zhuangRideConfig.airHazards]) assert(impactLines[item.name]);
+  assert.equal(zhuangRideConfig.stamps.length, 0, 'no unexplained collectible rings');
+});
+
+test('optional Si opponent progresses independently, freezes with the race, and can win or lose', () => {
+  const run = (delay, opponent = true) => {
+    const e = zhuangEngine(); e.setOpponent(opponent); let pendingAt;
+    while (e.state === 'playing' && e.elapsed < 170) {
+      const before = e.rival.progress;
+      e.update(1 / 120);
+      assert(e.rival.progress >= before); assert(e.rival.speed <= 42);
+      if (e.takeoffPending) { pendingAt ??= e.elapsed; if (e.elapsed - pendingAt >= delay) e.requestTakeoff(); }
+      e.takeEvents();
+    }
+    return e;
+  };
+  assert.equal(run(0).outcome, 'player'); assert.equal(run(60).outcome, 'rival'); assert.equal(run(60, false).outcome, 'late');
+  const e = zhuangEngine(); e.setOpponent(true); advance(e, 15); e.pause();
+  const snapshot = JSON.stringify(e); advance(e, 3); assert.equal(JSON.stringify(e), snapshot);
+  e.start(); assert.equal(e.rival.progress, 0); assert(e.rival.enabled);
+  e.setOpponent(false); assert(!e.rival.enabled); e.resume(); advance(e, 1); assert.equal(e.rival.progress, 0);
+});
+
+test('slow-motion decision and AI simulation are consistent at 30, 60 and 120 Hz', () => {
+  const run = fps => {
+    const e = zhuangEngine(); e.setOpponent(true); let pendingAt;
+    while (e.state === 'playing' && e.elapsed < 130) {
+      if (e.takeoffPending) { pendingAt ??= e.elapsed; if (e.elapsed - pendingAt >= 4 - 1e-8) e.requestTakeoff(); }
+      e.update(1 / fps); e.takeEvents();
+    }
+    return e;
+  };
+  // Decision button is pressed on a rendered frame, so allow one frame's input
+  // quantisation. Physics and timers still run at the shared 120 Hz fixed step.
+  const reference = run(120);
+  for (const fps of [30, 60]) { const e = run(fps); assert.equal(e.outcome, reference.outcome); assert(Math.abs(e.prizeClock - reference.prizeClock) < .08); assert(Math.abs(e.rival.progress - reference.rival.progress) < 4); }
 });
 
 // Decode real supplied skeletons without images or a WebGL context. Materials

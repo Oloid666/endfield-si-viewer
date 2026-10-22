@@ -273,3 +273,23 @@ header { top: calc(74px + env(safe-area-inset-top)); } #character-name { font-we
 
 #ride-root[data-rider="zhuang"][data-pace="fast"] #ride-speed { color:#ffe39e;font-weight:700; }
 #ride-root[data-rider="zhuang"][data-pace="flight"] #ride-speed { color:#ffbe9b;font-weight:800; }
+
+/* A usable power is bright; blue +1 pickups refill it, gold means press it. */
+#ride-root[data-rider="zhuang"] #ride-gas:not(:disabled) { opacity:1;background:#efd485;color:#263b2e;border-color:#fff1b2;box-shadow:0 0 20px #e6ce7f77;animation:power-ready 1.6s ease-in-out infinite alternate; }
+#ride-root[data-rider="zhuang"] #ride-gas:disabled { animation:none;box-shadow:none; }
+#ride-root[data-rider="zhuang"][data-refill="true"] #ride-gas { border-color:#87e0ff;box-shadow:0 0 25px #65c6efaa; }
+#ride-root[data-rider="zhuang"][data-slow="true"] #ride-gas { background:#b9e9dc;color:#183a32;box-shadow:0 0 30px #8ee8d1aa; }
+@keyframes power-ready { from { box-shadow:0 0 8px #e6ce7f55; } to { box-shadow:0 0 23px #e6ce7faa; } }
+#ride-prize { position:absolute;top:calc(112px + env(safe-area-inset-top));right:16px;width:190px;padding:10px 13px 10px 46px;background:linear-gradient(120deg,#243b31f2,#514b2be8);border:1px solid #efdb94;border-left:3px solid #f3dc8c;box-shadow:0 7px 22px #1a312b40;pointer-events:none; }
+#ride-prize > span { position:absolute;left:10px;top:29px;font-size:26px; }
+#ride-prize small { display:block;font-size:10px;letter-spacing:.12em;color:#e6d7aa; }#ride-prize strong { display:block;margin:5px 0;font-size:21px;color:#fff0b5; }#ride-prize em { font-size:9px;font-style:normal;color:#dfd7bf; }
+#ride-rival-option { display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;background:#233e3266;border:1px solid #d2d8a644;font-size:13px;pointer-events:auto;cursor:pointer; }
+#ride-rival-option input { width:20px;height:20px;accent-color:#d7d99f;cursor:pointer; }#ride-rival-option small { flex-basis:100%;padding-left:28px;font-size:9px;color:#ccd5b6; }
+#ride-rival-status { font-size:11px;margin:7px 0;min-height:0; }#ride-rival-status:empty { display:none; }
+#ride-root[data-rider="zhuang"][data-slow="true"] .ride-vfx { opacity:.25;background:linear-gradient(90deg,#a8e8d855,transparent 15%,transparent 85%,#a8e8d855); }
+#ride-root[data-rider="zhuang"][data-gas="true"] .ride-vfx { opacity:.8;background:linear-gradient(90deg,#f8de9066,transparent 16%,transparent 84%,#f8de9066),repeating-conic-gradient(from 4deg at 50% 45%,transparent 0 18deg,#ffe6a333 18.1deg 18.4deg,transparent 18.6deg 40deg);mask-image:radial-gradient(ellipse,transparent 42%,#000 76%);-webkit-mask-image:radial-gradient(ellipse,transparent 42%,#000 76%);animation:power-rush .7s linear infinite; }
+@keyframes power-rush { from { transform:scale(.98); } to { transform:scale(1.08); } }
+#ride-root:not([data-state="playing"]) #ride-gas,#ride-root:not([data-state="playing"]) .ride-vfx { animation-play-state:paused; }
+@media(max-height:500px) { #ride-prize { top:calc(108px + env(safe-area-inset-top));right:16px;width:180px; } }
+@media(prefers-reduced-motion:reduce) { #ride-root #ride-gas,#ride-root .ride-vfx { animation:none; } }
+#ride-root[data-rider="zhuang"][data-refill="true"] #ride-gas { animation:none; }
