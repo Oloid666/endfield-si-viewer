@@ -3,10 +3,11 @@ export const raceCast = {
 };
 export const portraitMoods=['calm','smug','panic','angry','dead'];
 const speakers={'祀':'si','莊':'zhuang','莊芳宜':'zhuang','小聰明':'ink','龍泡泡':'dragon'};
-export function dialogueParts(text, fallback='si', mood=null){
+export function dialogueParts(text, fallback='si', mood=null, grudge=0){
   return String(text).split(/(?=(?:祀|莊芳宜|莊|小聰明|龍泡泡)[：:])/u).map(s=>s.trim()).filter(Boolean).map(part=>{
     const prefix=part.match(/^(祀|莊芳宜|莊|小聰明|龍泡泡)[：:]/u),speaker=/^(廣播|系統)[：:]/.test(part)?'system':prefix?speakers[prefix[1]]:fallback;
-    const feeling=mood||(/？！|！！|起飛|機翼|升天|完了/.test(part)?'panic':/記得|記住|三根|算帳|放手/.test(part)?'angry':/休息了|躺|假沒休|拖把|呢？！/.test(part)?'dead':/先收|獎品|拿定|順便贏|借過|收筆/.test(part)?'smug':'calm');
+    const ownPet=speaker===(fallback==='zhuang'?'dragon':'ink');
+    const feeling=mood||(ownPet&&grudge>=3?(grudge>=5?'dead':'angry'):/？！|！！|起飛|機翼|升天|完了/.test(part)?'panic':/記得|記住|三根|算帳|放手/.test(part)?'angry':/休息了|休息的？|她是。我不是|躺|假沒休|拖把|呢？！/.test(part)?'dead':/先收|獎品|拿定|順便贏|借過|收筆/.test(part)?'smug':'calm');
     return {text:part,speaker,mood:portraitMoods.includes(feeling)?feeling:'calm'};
   });
 }
@@ -19,7 +20,7 @@ export class RaceDialogue {
     this.label=document.createElement('small');this.portrait.append(this.label);
     this.text=document.createElement('span');this.text.className='race-dialogue-text';line.append(this.portrait,this.text);
   }
-  set(text,clock,fallback='si',mood=null){this.parts=dialogueParts(text,fallback,mood);this.index=0;this.next=clock+2.6;this.show();return 3.3+(this.parts.length-1)*2.6;}
+  set(text,clock,fallback='si',mood=null,grudge=0){this.parts=dialogueParts(text,fallback,mood,grudge);this.index=0;this.next=clock+2.6;this.show();return 3.3+(this.parts.length-1)*2.6;}
   show(){
     const part=this.parts[this.index],cast=raceCast[part.speaker]||raceCast.si;
     this.line.dataset.speaker=part.speaker;this.line.dataset.mood=part.mood;
