@@ -91,10 +91,15 @@ export class RideEngine extends RaftEngine {
     const gap = r.progress - this.progress;
     const lead = gap > c.passMargin ? 1 : gap < -c.passMargin ? -1 : r.lead;
     const near = Math.abs(gap) < 14;
-    if (racing && r.clock >= r.nextQuip && (lead !== r.lead || (near && !r.near))) {
+    if (racing && (lead !== r.lead || (near && !r.near))) {
       r.reaction = lead !== r.lead ? lead > 0 ? 'pass' : 'passed' : 'near';
-      r.reactionUntil = r.clock + 2.4; r.nextQuip = r.clock + c.quipCooldown;
-      this.emit('rival', { action: r.reaction });
+      r.reactionUntil = r.clock + 2.4;
+      // The first pass must visibly react, even during opening dialogue.
+      // Only the subtitle has a cooldown; gestures never wait for text.
+      if (r.clock >= r.nextQuip) {
+        r.nextQuip = r.clock + c.quipCooldown;
+        this.emit('rival', { action: r.reaction });
+      }
     }
     r.lead = lead; r.near = near;
     if (r.progress >= this.config.length) {
